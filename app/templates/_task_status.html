@@ -1,0 +1,38 @@
+<section class="卡片 状态卡片" id="任务状态容器">
+  <div class="卡片标题区">
+    <h2>当前任务状态区</h2>
+  </div>
+  <div
+    class="状态数据容器"
+    id="任务状态数据容器"
+    hx-get="/任务状态片段"
+    hx-trigger="load, every 2s"
+    hx-swap="innerHTML"
+  >
+    {% include "_task_status_content.html" %}
+  </div>
+  <div class="按钮组">
+    <button
+      id="继续执行按钮"
+      class="主按钮"
+      type="button"
+      hx-post="/api/runzo/continue"
+      hx-target="#任务状态数据容器"
+      hx-swap="innerHTML"
+      hx-sync="#任务状态数据容器:replace"
+    >
+      继续执行
+    </button>
+    <button
+      id="终止任务按钮"
+      class="危险按钮"
+      type="button"
+      hx-post="/api/runzo/cancel"
+      hx-target="#任务状态数据容器"
+      hx-swap="innerHTML"
+      hx-sync="#任务状态数据容器:replace"
+    >
+      终止任务
+    </button>
+  </div>
+</section>

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Runzo 测试执行平台{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}" />
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  </head>
+  <body>
+    {% block content %}{% endblock %}
+    <script>
+      let 日志滚动状态 = null;
+
+      function 更新任务操作按钮() {
+        const 元数据 = document.getElementById("任务状态元数据");
+        const 继续按钮 = document.getElementById("继续执行按钮");
+        const 终止按钮 = document.getElementById("终止任务按钮");
+        if (!元数据 || !继续按钮 || !终止按钮) {
+          return;
+        }
+        const 当前状态 = 元数据.getAttribute("data-任务状态") || "";
+        const 任务ID = 元数据.getAttribute("data-任务id") || "";
+        继续按钮.disabled = 当前状态 !== "等待确认";
+        终止按钮.disabled = !任务ID || ["已完成", "已失败", "已终止"].includes(当前状态);
+      }
+
+      function 记录日志滚动状态() {
+        const 日志容器 = document.getElementById("日志滚动容器");
+        if (!日志容器) {
+          日志滚动状态 = null;
+          return;
+        }
+        日志滚动状态 = {
+          scrollTop: 日志容器.scrollTop,
+          scrollHeight: 日志容器.scrollHeight,
+          贴顶显示: 日志容器.scrollTop <= 24,
+        };
+      }
+
+      function 恢复日志滚动状态() {
+        const 日志容器 = document.getElementById("日志滚动容器");
+        if (!日志容器 || !日志滚动状态) {
+          return;
+        }
+        if (日志滚动状态.贴顶显示) {
+          日志容器.scrollTop = 0;
+          return;
+        }
+        const 高度差 = 日志容器.scrollHeight - 日志滚动状态.scrollHeight;
+        日志容器.scrollTop = Math.max(日志滚动状态.scrollTop + 高度差, 0);
+      }
+
+      async function 复制文本内容(文本) {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(文本);
+          return;
+        }
+        const 临时文本框 = document.createElement("textarea");
+        临时文本框.value = 文本;
+        临时文本框.setAttribute("readonly", "true");
+        临时文本框.style.position = "fixed";
+        临时文本框.style.opacity = "0";
+        document.body.appendChild(临时文本框);
+        临时文本框.select();
+        document.execCommand("copy");
+        document.body.removeChild(临时文本框);
+      }
+
+      function 更新复制按钮文案(按钮, 文案) {
+        const 原文案 = 按钮.dataset.原始文案 || 按钮.textContent || "复制内容";
+        按钮.dataset.原始文案 = 原文案;
+        按钮.textContent = 文案;
+        window.setTimeout(() => {
+          按钮.textContent = 按钮.dataset.原始文案 || "复制内容";
+        }, 1500);
+      }
+
+      function 获取表单缓存键(表单) {
+        return 表单?.getAttribute("data-表单缓存键") || "";
+      }
+
+      function 获取可缓存字段列表(表单) {
+        return Array.from(表单.elements || []).filter((元素) => {
+          if (!元素 || !元素.name || 元素.disabled) {
+            return false;
+          }
+          return ["INPUT", "TEXTAREA", "SELECT"].includes(元素.tagName);
+        });
+      }
+
+      function 保存表单缓存(表单) {
+        const 缓存键 = 获取表单缓存键(表单);
+        if (!缓存键) {
+          return;
+        }
+        const 缓存数据 = {};
+        获取可缓存字段列表(表单).forEach((元素) => {
+          if (元素.type === "checkbox") {
+            缓存数据[元素.name] = 元素.checked;
+            return;
+          }
+          if (元素.type === "radio") {
+            if (元素.checked) {
+              缓存数据[元素.name] = 元素.value;
+            }
+            return;
+          }
+          缓存数据[元素.name] = 元素.value;
+        });
+        sessionStorage.setItem(缓存键, JSON.stringify(缓存数据));
+      }
+
+      function 恢复表单缓存(表单) {
+        const 缓存键 = 获取表单缓存键(表单);
+        if (!缓存键) {
+          return;
+        }
+        const 原始数据 = sessionStorage.getItem(缓存键);
+        if (!原始数据) {
+          return;
+        }
+        let 缓存数据 = null;
+        try {
+          缓存数据 = JSON.parse(原始数据);
+        } catch {
+          sessionStorage.removeItem(缓存键);
+          return;
+        }
+        获取可缓存字段列表(表单).forEach((元素) => {
+          if (!(元素.name in 缓存数据)) {
+            return;
+          }
+          const 字段值 = 缓存数据[元素.name];
+          if (元素.type === "checkbox") {
+            元素.checked = Boolean(字段值);
+            return;
+          }
+          if (元素.type === "radio") {
+            元素.checked = 元素.value === 字段值;
+            return;
+          }
+          元素.value = 字段值 ?? "";
+        });
+        表单.querySelectorAll("select, input[type='radio'], input[type='checkbox']").forEach((元素) => {
+          元素.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+      }
+
+      function 恢复全部缓存表单() {
+        document.querySelectorAll("form[data-表单缓存键]").forEach((表单) => {
+          恢复表单缓存(表单);
+        });
+      }
+
+      document.addEventListener("click", (event) => {
+        const trigger = event.target.closest("[data-折叠触发]");
+        if (trigger) {
+          const targetSelector = trigger.getAttribute("data-折叠触发");
+          const target = document.querySelector(targetSelector);
+          if (!target) {
+            return;
+          }
+          const isExpanded = trigger.getAttribute("aria-expanded") === "true";
+          trigger.setAttribute("aria-expanded", String(!isExpanded));
+          target.hidden = isExpanded;
+          return;
+        }
+
+        const 复制按钮 = event.target.closest("[data-复制来源]");
+        if (!复制按钮) {
+          return;
+        }
+        const 来源元素 = document.getElementById(复制按钮.getAttribute("data-复制来源") || "");
+        if (!来源元素) {
+          更新复制按钮文案(复制按钮, "复制失败");
+          return;
+        }
+        复制文本内容(来源元素.textContent || "")
+          .then(() => {
+            更新复制按钮文案(复制按钮, "已复制");
+          })
+          .catch(() => {
+            更新复制按钮文案(复制按钮, "复制失败");
+          });
+      });
+
+      document.addEventListener("input", (event) => {
+        const 表单 = event.target.closest("form[data-表单缓存键]");
+        if (!表单) {
+          return;
+        }
+        保存表单缓存(表单);
+      });
+
+      document.addEventListener("change", (event) => {
+        const 表单 = event.target.closest("form[data-表单缓存键]");
+        if (!表单) {
+          return;
+        }
+        保存表单缓存(表单);
+      });
+
+      document.addEventListener("reset", (event) => {
+        const 表单 = event.target.closest("form[data-表单缓存键]");
+        if (!表单) {
+          return;
+        }
+        const 缓存键 = 获取表单缓存键(表单);
+        window.setTimeout(() => {
+          sessionStorage.removeItem(缓存键);
+        }, 0);
+      });
+
+      document.addEventListener("DOMContentLoaded", () => {
+        恢复全部缓存表单();
+        更新任务操作按钮();
+      });
+      document.body.addEventListener("htmx:beforeRequest", (event) => {
+        if (event.target.id === "任务状态数据容器") {
+          记录日志滚动状态();
+        }
+      });
+      document.body.addEventListener("htmx:afterSwap", (event) => {
+        if (event.target.id === "任务状态数据容器") {
+          更新任务操作按钮();
+          恢复日志滚动状态();
+        }
+      });
+    </script>
+  </body>
+  </html>

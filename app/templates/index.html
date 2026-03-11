@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Runzo训练数据上传{% endblock %}
+
+{% block content %}
+<main class="布局">
+  {% include "_runzo_sidebar.html" %}
+
+  <section class="主内容">
+    <header class="页面标题区">
+      <div>
+        <p class="页面眉题">Runzo · Web 操作化入口</p>
+        <h1>Runzo训练数据上传 · 多数据上传</h1>
+      </div>
+    </header>
+
+    <section class="内容双栏">
+      <section class="卡片">
+        <div class="卡片标题区">
+          <h2>参数输入区</h2>
+        </div>
+
+        <form
+          class="参数表单"
+          data-表单缓存键="多数据上传表单"
+          hx-post="/api/runzo/start"
+          hx-target="#任务状态数据容器"
+          hx-swap="innerHTML"
+          hx-sync="#任务状态数据容器:replace"
+        >
+          <div class="环境条">
+            <label class="环境选择">
+              <span>运行环境</span>
+              <select name="environment">
+                <option value="test" {% if 表单默认值.environment == "test" %}selected{% endif %}>测试环境</option>
+                <option value="preprod" {% if 表单默认值.environment == "preprod" %}selected{% endif %}>预发布环境</option>
+              </select>
+            </label>
+            <div class="环境说明">
+              <strong>环境说明</strong>
+              <p>测试环境沿用当前配置；预发布环境会切到新的 watch-settle 地址和 Mongo 连接。</p>
+            </div>
+          </div>
+
+          <div class="表单网格">
+            <label>
+              <span>用户 ID</span>
+              <input name="userId" type="text" value="{{ 表单默认值.userId }}" />
+            </label>
+            <label>
+              <span>Authorization</span>
+              <input name="authorization" type="text" placeholder="请输入 Bearer Token" value="{{ 表单默认值.authorization }}" />
+            </label>
+            <label>
+              <span>断点起跑时间</span>
+              <input
+                name="startFromDayStartTime"
+                type="number"
+                placeholder="留空表示 None"
+                value="{{ 表单默认值.startFromDayStartTime }}"
+              />
+            </label>
+            <label>
+              <span>Mongo createBy</span>
+              <input name="mongoCreateBy" type="text" value="{{ 表单默认值.mongoCreateBy }}" />
+            </label>
+            <label>
+              <span>性别</span>
+              <input name="gender" type="text" value="{{ 表单默认值.gender }}" />
+            </label>
+            <label>
+              <span>年龄</span>
+              <input name="age" type="number" value="{{ 表单默认值.age }}" />
+            </label>
+            <label>
+              <span>体重</span>
+              <input name="weight" type="number" step="0.1" value="{{ 表单默认值.weight }}" />
+            </label>
+            <label>
+              <span>身高</span>
+              <input name="height" type="number" step="0.1" value="{{ 表单默认值.height }}" />
+            </label>
+            <label>
+              <span>最大心率</span>
+              <input name="hrMax" type="number" value="{{ 表单默认值.hrMax }}" />
+            </label>
+            <label>
+              <span>静息心率</span>
+              <input name="hrRest" type="number" value="{{ 表单默认值.hrRest }}" />
+            </label>
+            <label>
+              <span>目标距离</span>
+              <input name="targetDistance" type="number" step="0.1" value="{{ 表单默认值.targetDistance }}" />
+            </label>
+            <label>
+              <span>强度偏好</span>
+              <input name="intensityPreference" type="text" value="{{ 表单默认值.intensityPreference }}" />
+            </label>
+          </div>
+
+          <div class="按钮组">
+            <button class="主按钮" type="submit">开始执行</button>
+            <button class="次按钮" type="reset">重置页面</button>
+          </div>
+        </form>
+      </section>
+
+      {% include "_task_status.html" %}
+    </section>
+  </section>
+</main>
+{% endblock %}

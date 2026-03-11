@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}Runzo训练数据上传{% endblock %}
+
+{% block content %}
+<main class="布局">
+  {% include "_runzo_sidebar.html" %}
+
+  <section class="主内容">
+    <header class="页面标题区">
+      <div>
+        <p class="页面眉题">Runzo · Web 操作化入口</p>
+        <h1>Runzo训练数据上传 · 单数据上传</h1>
+      </div>
+    </header>
+
+    <section class="内容双栏">
+      <section class="卡片">
+        <div class="卡片标题区">
+          <h2>参数输入区</h2>
+        </div>
+
+        <form
+          class="参数表单"
+          data-表单缓存键="单数据上传表单"
+          hx-post="/api/runzo/single-upload/execute"
+          hx-target="#单数据结果容器"
+          hx-swap="outerHTML"
+          hx-indicator="#单数据上传提示"
+        >
+          <div class="环境条">
+            <label class="环境选择">
+              <span>运行环境</span>
+              <select name="environment">
+                <option value="test" {% if 表单默认值.environment == "test" %}selected{% endif %}>测试环境</option>
+                <option value="preprod" {% if 表单默认值.environment == "preprod" %}selected{% endif %}>预发布环境</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="表单网格 单数据表单网格">
+            <label>
+              <span>用户 ID</span>
+              <input name="userId" type="text" value="{{ 表单默认值.userId }}" />
+            </label>
+            <label>
+              <span>Authorization</span>
+              <input name="authorization" type="text" placeholder="请输入 Bearer Token" value="{{ 表单默认值.authorization }}" />
+            </label>
+            <label>
+              <span>dailyId</span>
+              <input name="dailyId" type="text" value="{{ 表单默认值.dailyId }}" />
+            </label>
+            <label>
+              <span>训练类型</span>
+              <select name="trainingType">
+                <option value="Easy" {% if 表单默认值.trainingType == "Easy" %}selected{% endif %}>Easy</option>
+                <option value="LSD" {% if 表单默认值.trainingType == "LSD" %}selected{% endif %}>LSD</option>
+                <option value="Rest" {% if 表单默认值.trainingType == "Rest" %}selected{% endif %}>Rest</option>
+                <option value="ExtraSession" {% if 表单默认值.trainingType == "ExtraSession" %}selected{% endif %}>ExtraSession</option>
+                <option value="Threshold" {% if 表单默认值.trainingType == "Threshold" %}selected{% endif %}>Threshold</option>
+                <option value="Interval" {% if 表单默认值.trainingType == "Interval" %}selected{% endif %}>Interval</option>
+              </select>
+            </label>
+            <label>
+              <span>跑量距离</span>
+              <input name="runningDistance" type="number" step="0.1" value="{{ 表单默认值.runningDistance }}" />
+            </label>
+            <label>
+              <span>weekIndex</span>
+              <input name="weekIndex" type="number" value="{{ 表单默认值.weekIndex }}" />
+            </label>
+            <label>
+              <span>dayStartTime</span>
+              <input name="dayStartTime" type="number" value="{{ 表单默认值.dayStartTime }}" />
+            </label>
+            <label>
+              <span>stateDescription（自然语言描述调整训练数据强度）</span>
+              <input name="stateDescription" type="text" value="{{ 表单默认值.stateDescription }}" />
+            </label>
+            <div class="表单全宽 训练类型字段组" data-训练类型组="Easy,LSD,Rest,ExtraSession">
+              <div class="字段组标题">Easy / LSD / Rest / ExtraSession 字段</div>
+              <div class="子表单网格">
+                <label>
+                  <span>主训练最小配速</span>
+                  <input name="easyMinPace" type="text" value="{{ 表单默认值.easyMinPace }}" />
+                </label>
+                <label>
+                  <span>主训练最大配速</span>
+                  <input name="easyMaxPace" type="text" value="{{ 表单默认值.easyMaxPace }}" />
+                </label>
+              </div>
+            </div>
+            <div class="表单全宽 训练类型字段组" data-训练类型组="Threshold">
+              <div class="字段组标题">Threshold 字段</div>
+              <div class="子表单网格">
+                <label>
+                  <span>热身最小配速</span>
+                  <input name="thresholdWarmupMinPace" type="text" value="{{ 表单默认值.thresholdWarmupMinPace }}" />
+                </label>
+                <label>
+                  <span>热身最大配速</span>
+                  <input name="thresholdWarmupMaxPace" type="text" value="{{ 表单默认值.thresholdWarmupMaxPace }}" />
+                </label>
+                <label>
+                  <span>热身距离</span>
+                  <input name="thresholdWarmupDistance" type="number" step="0.1" value="{{ 表单默认值.thresholdWarmupDistance }}" />
+                </label>
+                <label>
+                  <span>主段最小配速</span>
+                  <input name="thresholdMainMinPace" type="text" value="{{ 表单默认值.thresholdMainMinPace }}" />
+                </label>
+                <label>
+                  <span>主段最大配速</span>
+                  <input name="thresholdMainMaxPace" type="text" value="{{ 表单默认值.thresholdMainMaxPace }}" />
+                </label>
+                <label>
+                  <span>主段距离</span>
+                  <input name="thresholdMainDistance" type="number" step="0.1" value="{{ 表单默认值.thresholdMainDistance }}" />
+                </label>
+              </div>
+            </div>
+            <div class="表单全宽 训练类型字段组" data-训练类型组="Interval">
+              <div class="字段组标题">Interval 字段</div>
+              <div class="子表单网格">
+                <label>
+                  <span>热身段最小配速</span>
+                  <input name="intervalBlock1MinPace" type="text" value="{{ 表单默认值.intervalBlock1MinPace }}" />
+                </label>
+                <label>
+                  <span>热身段最大配速</span>
+                  <input name="intervalBlock1MaxPace" type="text" value="{{ 表单默认值.intervalBlock1MaxPace }}" />
+                </label>
+                <label>
+                  <span>热身段距离</span>
+                  <input name="intervalBlock1Distance" type="number" step="0.1" value="{{ 表单默认值.intervalBlock1Distance }}" />
+                </label>
+                <label>
+                  <span>主训练段最小配速</span>
+                  <input name="intervalBlock2MinPace" type="text" value="{{ 表单默认值.intervalBlock2MinPace }}" />
+                </label>
+                <label>
+                  <span>主训练段最大配速</span>
+                  <input name="intervalBlock2MaxPace" type="text" value="{{ 表单默认值.intervalBlock2MaxPace }}" />
+                </label>
+                <label>
+                  <span>主训练段距离</span>
+                  <input name="intervalBlock2Distance" type="number" step="0.1" value="{{ 表单默认值.intervalBlock2Distance }}" />
+                </label>
+                <label>
+                  <span>循环次数 repeatNum</span>
+                  <input name="intervalRepeatNum" type="number" value="{{ 表单默认值.intervalRepeatNum }}" />
+                </label>
+                <label>
+                  <span>慢跑段最小配速</span>
+                  <input name="intervalBlock3MinPace" type="text" value="{{ 表单默认值.intervalBlock3MinPace }}" />
+                </label>
+                <label>
+                  <span>慢跑段最大配速</span>
+                  <input name="intervalBlock3MaxPace" type="text" value="{{ 表单默认值.intervalBlock3MaxPace }}" />
+                </label>
+                <label>
+                  <span>慢跑段距离</span>
+                  <input name="intervalBlock3Distance" type="number" step="0.1" value="{{ 表单默认值.intervalBlock3Distance }}" />
+                </label>
+              </div>
+            </div>
+            <label>
+              <span>性别</span>
+              <input name="gender" type="text" value="{{ 表单默认值.gender }}" />
+            </label>
+            <label>
+              <span>年龄</span>
+              <input name="age" type="number" value="{{ 表单默认值.age }}" />
+            </label>
+            <label>
+              <span>体重</span>
+              <input name="weight" type="number" step="0.1" value="{{ 表单默认值.weight }}" />
+            </label>
+            <label>
+              <span>身高</span>
+              <input name="height" type="number" step="0.1" value="{{ 表单默认值.height }}" />
+            </label>
+            <label>
+              <span>最大心率</span>
+              <input name="hrMax" type="number" value="{{ 表单默认值.hrMax }}" />
+            </label>
+            <label>
+              <span>静息心率</span>
+              <input name="hrRest" type="number" value="{{ 表单默认值.hrRest }}" />
+            </label>
+            <label>
+              <span>目标距离</span>
+              <input name="targetDistance" type="number" step="0.1" value="{{ 表单默认值.targetDistance }}" />
+            </label>
+            <label>
+              <span>强度偏好</span>
+              <input name="intensityPreference" type="text" value="{{ 表单默认值.intensityPreference }}" />
+            </label>
+          </div>
+
+          <div class="按钮组">
+            <button class="主按钮" id="单数据上传按钮" type="submit">执行单数据上传</button>
+            <button class="次按钮" type="reset">重置页面</button>
+          </div>
+          <div class="提交提示 htmx-indicator" id="单数据上传提示">数据正在上传，请稍候...</div>
+        </form>
+      </section>
+
+      {% include "_single_upload_result.html" %}
+    </section>
+  </section>
+</main>
+
+<script>
+  (() => {
+    function 切换训练类型字段组() {
+      const 类型选择框 = document.querySelector('select[name="trainingType"]');
+      if (!类型选择框) {
+        return;
+      }
+      const 当前训练类型 = 类型选择框.value;
+      document.querySelectorAll('[data-训练类型组]').forEach((元素) => {
+        const 支持类型 = (元素.getAttribute('data-训练类型组') || '').split(',');
+        元素.hidden = !支持类型.includes(当前训练类型);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', 切换训练类型字段组);
+    document.addEventListener('change', (event) => {
+      if (event.target && event.target.name === 'trainingType') {
+        切换训练类型字段组();
+      }
+    });
+    document.addEventListener('reset', () => {
+      setTimeout(切换训练类型字段组, 0);
+    });
+    document.body.addEventListener('htmx:beforeRequest', (event) => {
+      const 请求路径 = event.detail?.requestConfig?.path || '';
+      if (!请求路径.includes('/api/runzo/single-upload/execute')) {
+        return;
+      }
+      const 状态元素 = document.getElementById('单数据执行状态值');
+      const 摘要元素 = document.getElementById('单数据摘要值');
+      const 按钮元素 = document.getElementById('单数据上传按钮');
+      if (状态元素) {
+        状态元素.textContent = '执行中';
+      }
+      if (摘要元素) {
+        摘要元素.textContent = '数据正在上传，请稍候...';
+      }
+      if (按钮元素) {
+        按钮元素.disabled = true;
+      }
+    });
+    document.body.addEventListener('htmx:afterRequest', (event) => {
+      const 请求路径 = event.detail?.requestConfig?.path || '';
+      if (!请求路径.includes('/api/runzo/single-upload/execute')) {
+        return;
+      }
+      const 按钮元素 = document.getElementById('单数据上传按钮');
+      if (按钮元素) {
+        按钮元素.disabled = false;
+      }
+    });
+  })();
+</script>
+{% endblock %}

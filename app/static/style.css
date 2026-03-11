@@ -1,0 +1,486 @@
+/* 页面全局样式。 */
+
+:root {
+  --背景色: #f7f7f7;
+  --卡片色: #ffffff;
+  --边框色: #e6e6e6;
+  --文字色: #111111;
+  --弱文字: #666666;
+  --主色: #111111;
+  --激活底色: #eef4ff;
+  --激活边框: #cadeff;
+  --危险色: #c53a3a;
+  --成功色: #1d8f4d;
+  --警告色: #b98517;
+  --信息色: #2963d6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  color: var(--文字色);
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #ffffff;
+}
+
+.布局 {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.侧栏 {
+  padding: 28px 18px;
+  border-right: 1px solid var(--边框色);
+  background: #ffffff;
+}
+
+.侧栏标题 {
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: var(--弱文字);
+}
+
+.功能导航 {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.功能项,
+.子功能项 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  color: var(--文字色);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.子功能项 {
+  border: none;
+  background: transparent;
+}
+
+.功能折叠按钮 {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.功能项:hover,
+.子功能项:hover {
+  background: #f4f6fa;
+}
+
+.功能项激活,
+.子功能项激活 {
+  background: var(--激活底色);
+  color: #204e9d;
+  font-weight: 700;
+}
+
+.功能图标 {
+  width: 18px;
+  text-align: center;
+  color: #7a7a7a;
+}
+
+.折叠箭头 {
+  margin-left: auto;
+  color: #7a7a7a;
+  transition: transform 0.18s ease;
+}
+
+.功能折叠按钮[aria-expanded="true"] .折叠箭头 {
+  transform: rotate(180deg);
+}
+
+.子功能组 {
+  margin-left: 12px;
+  margin-top: 4px;
+  padding-left: 16px;
+  border-left: 1px solid #e9edf3;
+}
+
+.子功能项 {
+  font-size: 13px;
+}
+
+.主内容 {
+  padding: 28px;
+  background: #fcfcfc;
+}
+
+.页面标题区 {
+  margin-bottom: 20px;
+  padding: 24px;
+  border: 1px solid var(--边框色);
+  border-radius: 24px;
+  background: var(--卡片色);
+}
+
+.页面眉题 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--弱文字);
+}
+
+.页面标题区 h1 {
+  margin: 0 0 12px;
+  font-size: 34px;
+  color: #000000;
+}
+
+.内容双栏 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.卡片 {
+  padding: 24px;
+  border: 1px solid var(--边框色);
+  border-radius: 24px;
+  background: var(--卡片色);
+}
+
+.卡片标题区 h2,
+.卡片标题区 h3 {
+  margin: 0;
+  color: #000000;
+}
+
+.卡片标题区 p {
+  margin: 8px 0 0;
+  color: var(--弱文字);
+  line-height: 1.7;
+}
+
+.卡片标题区.紧凑 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.环境条 {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 14px;
+  margin-top: 18px;
+  margin-bottom: 18px;
+}
+
+.环境选择,
+.环境说明 {
+  padding: 16px;
+  border: 1px solid var(--边框色);
+  border-radius: 18px;
+  background: #fafafa;
+}
+
+.环境选择 {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.环境说明 strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.环境说明 p {
+  margin: 0;
+  line-height: 1.7;
+  color: var(--弱文字);
+}
+
+.参数表单 {
+  margin-top: 18px;
+}
+
+.表单网格 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.表单全宽 {
+  grid-column: 1 / -1;
+}
+
+.子表单网格 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.训练类型字段组 {
+  padding: 18px;
+  border: 1px solid var(--边框色);
+  border-radius: 18px;
+  background: #fafafa;
+}
+
+.字段组标题 {
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111111;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--弱文字);
+  position: relative;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #d9d9d9;
+  border-radius: 14px;
+  font: inherit;
+  color: #000000;
+  background: #ffffff;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.按钮组 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.提交提示 {
+  display: none;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #eef5ff;
+  border: 1px solid #cadeff;
+  color: #204e9d;
+  font-size: 14px;
+}
+
+.htmx-request#单数据上传提示,
+.htmx-request .提交提示,
+#单数据上传提示.htmx-request {
+  display: block;
+}
+
+.状态数据容器 {
+  min-height: 240px;
+}
+
+button {
+  padding: 12px 18px;
+  border: none;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.主按钮 {
+  background: #111111;
+  color: #ffffff;
+}
+
+.次按钮 {
+  background: #f0f0f0;
+  color: #111111;
+}
+
+.危险按钮 {
+  background: var(--危险色);
+  color: #ffffff;
+}
+
+.状态摘要 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.状态摘要 > div,
+.检查点提示,
+.提示条,
+.空状态 {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #fafafa;
+  border: 1px solid var(--边框色);
+}
+
+.标签 {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--弱文字);
+}
+
+.详情列表 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0 0;
+}
+
+.详情列表 div {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #fafafa;
+  border: 1px solid var(--边框色);
+}
+
+.详情列表 dt {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--弱文字);
+}
+
+.详情列表 dd {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.检查点提示 {
+  margin-top: 18px;
+  background: #fff8e8;
+}
+
+.提示条 {
+  margin-top: 18px;
+  background: #eef5ff;
+}
+
+.日志区 {
+  margin-top: 20px;
+}
+
+.日志滚动容器 {
+  max-height: 520px;
+  overflow-y: auto;
+  margin-top: 16px;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+.日志列表 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.日志项 {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #fafafa;
+  border: 1px solid var(--边框色);
+}
+
+.日志头 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--弱文字);
+}
+
+.日志项 p {
+  margin: 0;
+  line-height: 1.75;
+}
+
+.日志成功 {
+  border-left: 4px solid var(--成功色);
+}
+
+.日志错误 {
+  border-left: 4px solid var(--危险色);
+}
+
+.日志警告 {
+  border-left: 4px solid var(--警告色);
+}
+
+.日志信息 {
+  border-left: 4px solid var(--信息色);
+}
+
+.文字链接 {
+  color: #204e9d;
+  text-decoration: none;
+}
+
+.复制按钮 {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #204e9d;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.代码展示区 {
+  margin: 16px 0 0;
+  padding: 16px;
+  border: 1px solid var(--边框色);
+  border-radius: 18px;
+  background: #fafafa;
+  color: #111111;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 280px;
+  overflow: auto;
+}
+
+@media (max-width: 1120px) {
+  .布局,
+  .内容双栏,
+  .环境条,
+  .表单网格,
+  .子表单网格,
+  .状态摘要,
+  .详情列表 {
+    grid-template-columns: 1fr;
+  }
+
+  .侧栏 {
+    border-right: none;
+    border-bottom: 1px solid var(--边框色);
+  }
+}
