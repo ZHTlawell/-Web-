@@ -35,3 +35,7 @@ out/
 # Codex 本地技能目录
 .agent/
 .agents/
+
+# 本地文档与脚本
+docs/
+scripts/
