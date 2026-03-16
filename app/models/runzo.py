@@ -192,6 +192,59 @@ class SingleUploadParams(BaseModel):
         return daily
 
 
+class SingleUploadApiRequest(BaseModel):
+    """JSON request payload for the v1 single-upload API."""
+
+    environment: RuntimeEnvironment = Field(default=RuntimeEnvironment.TEST, alias="environment")
+    user_id: str = Field(alias="userId")
+    daily_id: str = Field(alias="dailyId")
+    training_type: TrainingType = Field(alias="trainingType")
+    running_distance: float = Field(alias="runningDistance")
+    training_blocks: list[dict[str, Any]] = Field(alias="trainingBlocks")
+    state_description: str = Field(default="", alias="stateDescription")
+    week_index: Optional[int] = Field(default=None, alias="weekIndex")
+    day_start_time: Optional[int] = Field(default=None, alias="dayStartTime")
+    include_debug: bool = Field(default=False, alias="includeDebug")
+    user_data: RunzoUserProfile = Field(alias="userData")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("user_id", "daily_id")
+    @classmethod
+    def validate_required_api_text(cls, value: str) -> str:
+        """Validate required API text fields."""
+        text = value.strip()
+        if not text:
+            raise ValueError("该字段不能为空")
+        return text
+
+    @field_validator("running_distance")
+    @classmethod
+    def validate_api_running_distance(cls, value: float) -> float:
+        """Validate API target distance."""
+        if value <= 0:
+            raise ValueError("目标距离必须大于 0")
+        return value
+
+    @field_validator("week_index", "day_start_time")
+    @classmethod
+    def validate_api_optional_positive_int(cls, value: Optional[int]) -> Optional[int]:
+        """Validate optional positive integers for the API payload."""
+        if value is None:
+            return None
+        if value <= 0:
+            raise ValueError("该字段必须大于 0")
+        return value
+
+    @field_validator("training_blocks")
+    @classmethod
+    def validate_api_training_blocks(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Ensure training blocks are not empty."""
+        if not value:
+            raise ValueError("trainingBlocks 不能为空")
+        return value
+
+
 class SingleUploadResultView(BaseModel):
     """Execution result returned to the single-upload page."""
 
@@ -204,6 +257,51 @@ class SingleUploadResultView(BaseModel):
     simulate_response: str = ""
     settlement_request: str = ""
     settlement_response: str = ""
+
+
+class SingleUploadDebugInfo(BaseModel):
+    """Optional debug payload returned by the v1 single-upload API."""
+
+    simulate_request: dict[str, Any] = Field(alias="simulateRequest")
+    simulate_response: Optional[dict[str, Any]] = Field(default=None, alias="simulateResponse")
+    settlement_request: Optional[dict[str, Any]] = Field(default=None, alias="settlementRequest")
+    settlement_response: Optional[dict[str, Any]] = Field(default=None, alias="settlementResponse")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class SingleUploadApiData(BaseModel):
+    """JSON payload returned by the v1 single-upload API."""
+
+    success: bool
+    execution_status: str = Field(alias="executionStatus")
+    summary: str
+    environment: RuntimeEnvironment
+    error_message: Optional[str] = Field(default=None, alias="errorMessage")
+    debug_info: Optional[SingleUploadDebugInfo] = Field(default=None, alias="debugInfo")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class SingleUploadApiResponse(BaseModel):
+    """Envelope returned by the v1 single-upload API."""
+
+    code: int
+    message: str
+    data: Optional[SingleUploadApiData] = None
+
+
+class SingleUploadExecutionArtifacts(BaseModel):
+    """Structured result for one complete single-upload execution."""
+
+    success: bool = False
+    environment: RuntimeEnvironment = RuntimeEnvironment.TEST
+    summary: str = ""
+    error_message: Optional[str] = None
+    simulate_request: dict[str, Any] = Field(default_factory=dict)
+    simulate_response: Optional[dict[str, Any]] = None
+    settlement_request: Optional[dict[str, Any]] = None
+    settlement_response: Optional[dict[str, Any]] = None
 
 
 class TaskLogEntry(BaseModel):

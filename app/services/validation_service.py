@@ -6,7 +6,7 @@ from typing import Any, Mapping, Optional
 
 from pydantic import ValidationError
 
-from app.models.runzo import RunzoTaskParams, RunzoUserProfile, SingleUploadParams
+from app.models.runzo import RunzoTaskParams, RunzoUserProfile, SingleUploadApiRequest, SingleUploadParams
 
 
 def validate_headers_latin1(headers: dict[str, Any]) -> None:
@@ -78,6 +78,32 @@ def build_single_upload_params_from_form(
             "targetDistance": form_data.get("targetDistance", 5),
             "intensityPreference": form_data.get("intensityPreference", "medium"),
         },
+    }
+    try:
+        return SingleUploadParams.model_validate(raw_data)
+    except ValidationError as exc:
+        raise ValueError(exc.errors()[0]["msg"]) from exc
+
+
+def build_single_upload_params_from_api_payload(
+    payload: SingleUploadApiRequest,
+    authorization: str,
+    app_version: str,
+) -> SingleUploadParams:
+    """Convert the v1 JSON payload and headers into service params."""
+    raw_data = {
+        "environment": payload.environment.value,
+        "userId": payload.user_id,
+        "authorization": authorization,
+        "tsAppVersion": app_version,
+        "dailyId": payload.daily_id,
+        "trainingType": payload.training_type.value,
+        "runningDistance": payload.running_distance,
+        "trainingBlocks": payload.training_blocks,
+        "stateDescription": payload.state_description,
+        "weekIndex": payload.week_index,
+        "dayStartTime": payload.day_start_time,
+        "user_data": payload.user_data.model_dump(by_alias=True),
     }
     try:
         return SingleUploadParams.model_validate(raw_data)

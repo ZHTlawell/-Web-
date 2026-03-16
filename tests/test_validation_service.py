@@ -2,8 +2,10 @@
 
 import pytest
 
+from app.models.runzo import SingleUploadApiRequest
 from app.services.validation_service import (
     build_base_headers,
+    build_single_upload_params_from_api_payload,
     build_single_upload_headers,
     build_single_upload_params_from_form,
     build_task_params_from_form,
@@ -214,3 +216,46 @@ def test_build_single_upload_headers_use_passed_app_version():
     )
 
     assert headers["ts-app-version"] == "4.0.1"
+
+
+def test_build_single_upload_params_from_api_payload_parses_correctly():
+    """v1 JSON payload should convert into service params."""
+    payload = SingleUploadApiRequest.model_validate(
+        {
+            "environment": "preprod",
+            "userId": "10001",
+            "dailyId": "daily-009",
+            "trainingType": "Threshold",
+            "runningDistance": 8,
+            "stateDescription": "今天有点累",
+            "weekIndex": 1,
+            "dayStartTime": 1773676800000,
+            "userData": {
+                "gender": "male",
+                "age": 22,
+                "weight": 75,
+                "height": 175,
+                "hrMax": 198,
+                "hrRest": 65,
+                "targetDistance": 5,
+                "intensityPreference": "medium",
+            },
+            "trainingBlocks": [
+                {"minPace": "6:00", "maxPace": "6:30", "distance": 2},
+                {"minPace": "4:30", "maxPace": "4:45", "distance": 4},
+            ],
+        }
+    )
+
+    params = build_single_upload_params_from_api_payload(
+        payload,
+        authorization="Bearer abcdefg",
+        app_version="2.6.0",
+    )
+
+    assert params.environment.value == "preprod"
+    assert params.user_id == "10001"
+    assert params.authorization == "Bearer abcdefg"
+    assert params.app_version == "2.6.0"
+    assert params.daily_id == "daily-009"
+    assert params.training_blocks[0]["distance"] == 2
