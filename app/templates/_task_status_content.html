@@ -1,47 +1,47 @@
-{% if 状态提示 %}
-<div class="提示条">{{ 状态提示 }}</div>
+{% if status_message %}
+<div class="提示条">{{ status_message }}</div>
 {% endif %}
 
 <div
-  id="任务状态元数据"
-  data-任务状态="{{ 任务视图.状态.value }}"
-  data-任务id="{{ 任务视图.任务ID or '' }}"
+  id="task-status-metadata"
+  data-task-status="{{ task_view.status.value }}"
+  data-task-id="{{ task_view.task_id or '' }}"
 ></div>
 
 <div class="状态摘要">
   <div>
     <span class="标签">状态</span>
-    <strong>{{ 任务视图.状态.value }}</strong>
+    <strong>{{ task_view.status.value }}</strong>
   </div>
   <div>
     <span class="标签">当前环境</span>
-    <strong>{{ "预发布环境" if 任务视图.当前环境.value == "preprod" else "测试环境" }}</strong>
+    <strong>{{ "预发布环境" if task_view.environment.value == "preprod" else "测试环境" }}</strong>
   </div>
   <div>
     <span class="标签">任务 ID</span>
-    <strong>{{ 任务视图.任务ID or "暂无" }}</strong>
+    <strong>{{ task_view.task_id or "暂无" }}</strong>
   </div>
   <div>
     <span class="标签">已完成数量</span>
-    <strong>{{ 任务视图.已完成数量 }}</strong>
+    <strong>{{ task_view.completed_count }}</strong>
   </div>
   <div>
     <span class="标签">已屏蔽令牌</span>
-    <strong>{{ 任务视图.已屏蔽令牌 or "尚未提交" }}</strong>
+    <strong>{{ task_view.masked_token or "尚未提交" }}</strong>
   </div>
 </div>
 
 <dl class="详情列表">
-  <div><dt>当前摘要</dt><dd>{{ 任务视图.摘要 }}</dd></div>
-  <div><dt>当前周</dt><dd>{{ 任务视图.当前周 if 任务视图.当前周 is not none else "暂无" }}</dd></div>
-  <div><dt>训练类型</dt><dd>{{ 任务视图.当前训练类型 or "暂无" }}</dd></div>
-  <div><dt>当前 dayStartTime</dt><dd>{{ 任务视图.当前日开始时间 if 任务视图.当前日开始时间 is not none else "暂无" }}</dd></div>
-  <div><dt>检查点</dt><dd>{{ 任务视图.检查点类型.value if 任务视图.检查点类型 else "无" }}</dd></div>
-  <div><dt>错误信息</dt><dd>{{ 任务视图.错误信息 or "无" }}</dd></div>
+  <div><dt>当前摘要</dt><dd>{{ task_view.summary }}</dd></div>
+  <div><dt>当前周</dt><dd>{{ task_view.current_week if task_view.current_week is not none else "暂无" }}</dd></div>
+  <div><dt>训练类型</dt><dd>{{ task_view.current_training_type or "暂无" }}</dd></div>
+  <div><dt>当前 dayStartTime</dt><dd>{{ task_view.current_day_start_time if task_view.current_day_start_time is not none else "暂无" }}</dd></div>
+  <div><dt>检查点</dt><dd>{{ task_view.checkpoint_type.value if task_view.checkpoint_type else "无" }}</dd></div>
+  <div><dt>错误信息</dt><dd>{{ task_view.error_message or "无" }}</dd></div>
 </dl>
 
-{% if 任务视图.检查点提示 %}
-<div class="检查点提示">{{ 任务视图.检查点提示 }}</div>
+{% if task_view.checkpoint_message %}
+<div class="检查点提示">{{ task_view.checkpoint_message }}</div>
 {% endif %}
 
 <div class="日志区">
@@ -49,16 +49,16 @@
     <h3>执行日志区</h3>
     <a class="文字链接" href="/api/runzo/status" target="_blank">查看 JSON</a>
   </div>
-  <div class="日志滚动容器" id="日志滚动容器">
-    {% if 任务视图.日志列表 %}
+  <div class="日志滚动容器" id="log-scroll-container">
+    {% if task_view.logs %}
       <ul class="日志列表">
-        {% for 日志 in 任务视图.日志列表 %}
-        <li class="日志项 日志{{ 日志.级别.value }}">
+        {% for log in task_view.logs %}
+        <li class="日志项 日志{{ log.level.value }}">
           <div class="日志头">
-            <span>{{ 日志.级别.value }}</span>
-            <time>{{ 日志.时间.strftime("%Y-%m-%d %H:%M:%S") }}</time>
+            <span>{{ log.level.value }}</span>
+            <time>{{ log.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}</time>
           </div>
-          <p>{{ 日志.内容 }}</p>
+          <p>{{ log.message }}</p>
         </li>
         {% endfor %}
       </ul>

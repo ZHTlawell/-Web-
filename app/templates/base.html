@@ -10,223 +10,223 @@
   <body>
     {% block content %}{% endblock %}
     <script>
-      let 日志滚动状态 = null;
+      let logScrollState = null;
 
-      function 更新任务操作按钮() {
-        const 元数据 = document.getElementById("任务状态元数据");
-        const 继续按钮 = document.getElementById("继续执行按钮");
-        const 终止按钮 = document.getElementById("终止任务按钮");
-        if (!元数据 || !继续按钮 || !终止按钮) {
+      function updateTaskActionButtons() {
+        const metadata = document.getElementById("task-status-metadata");
+        const continueButton = document.getElementById("continue-task-button");
+        const cancelButton = document.getElementById("cancel-task-button");
+        if (!metadata || !continueButton || !cancelButton) {
           return;
         }
-        const 当前状态 = 元数据.getAttribute("data-任务状态") || "";
-        const 任务ID = 元数据.getAttribute("data-任务id") || "";
-        继续按钮.disabled = 当前状态 !== "等待确认";
-        终止按钮.disabled = !任务ID || ["已完成", "已失败", "已终止"].includes(当前状态);
+        const currentStatus = metadata.getAttribute("data-task-status") || "";
+        const taskId = metadata.getAttribute("data-task-id") || "";
+        continueButton.disabled = currentStatus !== "等待确认";
+        cancelButton.disabled = !taskId || ["已完成", "已失败", "已终止"].includes(currentStatus);
       }
 
-      function 记录日志滚动状态() {
-        const 日志容器 = document.getElementById("日志滚动容器");
-        if (!日志容器) {
-          日志滚动状态 = null;
+      function rememberLogScrollState() {
+        const logContainer = document.getElementById("log-scroll-container");
+        if (!logContainer) {
+          logScrollState = null;
           return;
         }
-        日志滚动状态 = {
-          scrollTop: 日志容器.scrollTop,
-          scrollHeight: 日志容器.scrollHeight,
-          贴顶显示: 日志容器.scrollTop <= 24,
+        logScrollState = {
+          scrollTop: logContainer.scrollTop,
+          scrollHeight: logContainer.scrollHeight,
+          isPinnedToTop: logContainer.scrollTop <= 24,
         };
       }
 
-      function 恢复日志滚动状态() {
-        const 日志容器 = document.getElementById("日志滚动容器");
-        if (!日志容器 || !日志滚动状态) {
+      function restoreLogScrollState() {
+        const logContainer = document.getElementById("log-scroll-container");
+        if (!logContainer || !logScrollState) {
           return;
         }
-        if (日志滚动状态.贴顶显示) {
-          日志容器.scrollTop = 0;
+        if (logScrollState.isPinnedToTop) {
+          logContainer.scrollTop = 0;
           return;
         }
-        const 高度差 = 日志容器.scrollHeight - 日志滚动状态.scrollHeight;
-        日志容器.scrollTop = Math.max(日志滚动状态.scrollTop + 高度差, 0);
+        const heightDelta = logContainer.scrollHeight - logScrollState.scrollHeight;
+        logContainer.scrollTop = Math.max(logScrollState.scrollTop + heightDelta, 0);
       }
 
-      async function 复制文本内容(文本) {
+      async function copyTextContent(text) {
         if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(文本);
+          await navigator.clipboard.writeText(text);
           return;
         }
-        const 临时文本框 = document.createElement("textarea");
-        临时文本框.value = 文本;
-        临时文本框.setAttribute("readonly", "true");
-        临时文本框.style.position = "fixed";
-        临时文本框.style.opacity = "0";
-        document.body.appendChild(临时文本框);
-        临时文本框.select();
+        const tempTextarea = document.createElement("textarea");
+        tempTextarea.value = text;
+        tempTextarea.setAttribute("readonly", "true");
+        tempTextarea.style.position = "fixed";
+        tempTextarea.style.opacity = "0";
+        document.body.appendChild(tempTextarea);
+        tempTextarea.select();
         document.execCommand("copy");
-        document.body.removeChild(临时文本框);
+        document.body.removeChild(tempTextarea);
       }
 
-      function 更新复制按钮文案(按钮, 文案) {
-        const 原文案 = 按钮.dataset.原始文案 || 按钮.textContent || "复制内容";
-        按钮.dataset.原始文案 = 原文案;
-        按钮.textContent = 文案;
+      function updateCopyButtonLabel(button, label) {
+        const originalLabel = button.dataset.originalLabel || button.textContent || "复制内容";
+        button.dataset.originalLabel = originalLabel;
+        button.textContent = label;
         window.setTimeout(() => {
-          按钮.textContent = 按钮.dataset.原始文案 || "复制内容";
+          button.textContent = button.dataset.originalLabel || "复制内容";
         }, 1500);
       }
 
-      function 获取表单缓存键(表单) {
-        return 表单?.getAttribute("data-表单缓存键") || "";
+      function getFormCacheKey(form) {
+        return form?.getAttribute("data-form-cache-key") || "";
       }
 
-      function 获取可缓存字段列表(表单) {
-        return Array.from(表单.elements || []).filter((元素) => {
-          if (!元素 || !元素.name || 元素.disabled) {
+      function getCacheableFormFields(form) {
+        return Array.from(form.elements || []).filter((element) => {
+          if (!element || !element.name || element.disabled) {
             return false;
           }
-          return ["INPUT", "TEXTAREA", "SELECT"].includes(元素.tagName);
+          return ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName);
         });
       }
 
-      function 保存表单缓存(表单) {
-        const 缓存键 = 获取表单缓存键(表单);
-        if (!缓存键) {
+      function saveFormCache(form) {
+        const cacheKey = getFormCacheKey(form);
+        if (!cacheKey) {
           return;
         }
-        const 缓存数据 = {};
-        获取可缓存字段列表(表单).forEach((元素) => {
-          if (元素.type === "checkbox") {
-            缓存数据[元素.name] = 元素.checked;
+        const cacheData = {};
+        getCacheableFormFields(form).forEach((element) => {
+          if (element.type === "checkbox") {
+            cacheData[element.name] = element.checked;
             return;
           }
-          if (元素.type === "radio") {
-            if (元素.checked) {
-              缓存数据[元素.name] = 元素.value;
+          if (element.type === "radio") {
+            if (element.checked) {
+              cacheData[element.name] = element.value;
             }
             return;
           }
-          缓存数据[元素.name] = 元素.value;
+          cacheData[element.name] = element.value;
         });
-        sessionStorage.setItem(缓存键, JSON.stringify(缓存数据));
+        sessionStorage.setItem(cacheKey, JSON.stringify(cacheData));
       }
 
-      function 恢复表单缓存(表单) {
-        const 缓存键 = 获取表单缓存键(表单);
-        if (!缓存键) {
+      function restoreFormCache(form) {
+        const cacheKey = getFormCacheKey(form);
+        if (!cacheKey) {
           return;
         }
-        const 原始数据 = sessionStorage.getItem(缓存键);
-        if (!原始数据) {
+        const rawData = sessionStorage.getItem(cacheKey);
+        if (!rawData) {
           return;
         }
-        let 缓存数据 = null;
+        let cacheData = null;
         try {
-          缓存数据 = JSON.parse(原始数据);
+          cacheData = JSON.parse(rawData);
         } catch {
-          sessionStorage.removeItem(缓存键);
+          sessionStorage.removeItem(cacheKey);
           return;
         }
-        获取可缓存字段列表(表单).forEach((元素) => {
-          if (!(元素.name in 缓存数据)) {
+        getCacheableFormFields(form).forEach((element) => {
+          if (!(element.name in cacheData)) {
             return;
           }
-          const 字段值 = 缓存数据[元素.name];
-          if (元素.type === "checkbox") {
-            元素.checked = Boolean(字段值);
+          const fieldValue = cacheData[element.name];
+          if (element.type === "checkbox") {
+            element.checked = Boolean(fieldValue);
             return;
           }
-          if (元素.type === "radio") {
-            元素.checked = 元素.value === 字段值;
+          if (element.type === "radio") {
+            element.checked = element.value === fieldValue;
             return;
           }
-          元素.value = 字段值 ?? "";
+          element.value = fieldValue ?? "";
         });
-        表单.querySelectorAll("select, input[type='radio'], input[type='checkbox']").forEach((元素) => {
-          元素.dispatchEvent(new Event("change", { bubbles: true }));
+        form.querySelectorAll("select, input[type='radio'], input[type='checkbox']").forEach((element) => {
+          element.dispatchEvent(new Event("change", { bubbles: true }));
         });
       }
 
-      function 恢复全部缓存表单() {
-        document.querySelectorAll("form[data-表单缓存键]").forEach((表单) => {
-          恢复表单缓存(表单);
+      function restoreAllCachedForms() {
+        document.querySelectorAll("form[data-form-cache-key]").forEach((form) => {
+          restoreFormCache(form);
         });
       }
 
       document.addEventListener("click", (event) => {
-        const trigger = event.target.closest("[data-折叠触发]");
-        if (trigger) {
-          const targetSelector = trigger.getAttribute("data-折叠触发");
+        const toggleTrigger = event.target.closest("[data-toggle-target]");
+        if (toggleTrigger) {
+          const targetSelector = toggleTrigger.getAttribute("data-toggle-target");
           const target = document.querySelector(targetSelector);
           if (!target) {
             return;
           }
-          const isExpanded = trigger.getAttribute("aria-expanded") === "true";
-          trigger.setAttribute("aria-expanded", String(!isExpanded));
+          const isExpanded = toggleTrigger.getAttribute("aria-expanded") === "true";
+          toggleTrigger.setAttribute("aria-expanded", String(!isExpanded));
           target.hidden = isExpanded;
           return;
         }
 
-        const 复制按钮 = event.target.closest("[data-复制来源]");
-        if (!复制按钮) {
+        const copyButton = event.target.closest("[data-copy-source]");
+        if (!copyButton) {
           return;
         }
-        const 来源元素 = document.getElementById(复制按钮.getAttribute("data-复制来源") || "");
-        if (!来源元素) {
-          更新复制按钮文案(复制按钮, "复制失败");
+        const sourceElement = document.getElementById(copyButton.getAttribute("data-copy-source") || "");
+        if (!sourceElement) {
+          updateCopyButtonLabel(copyButton, "复制失败");
           return;
         }
-        复制文本内容(来源元素.textContent || "")
+        copyTextContent(sourceElement.textContent || "")
           .then(() => {
-            更新复制按钮文案(复制按钮, "已复制");
+            updateCopyButtonLabel(copyButton, "已复制");
           })
           .catch(() => {
-            更新复制按钮文案(复制按钮, "复制失败");
+            updateCopyButtonLabel(copyButton, "复制失败");
           });
       });
 
       document.addEventListener("input", (event) => {
-        const 表单 = event.target.closest("form[data-表单缓存键]");
-        if (!表单) {
-          return;
+        const form = event.target.closest("form[data-form-cache-key]");
+        if (form) {
+          saveFormCache(form);
         }
-        保存表单缓存(表单);
       });
 
       document.addEventListener("change", (event) => {
-        const 表单 = event.target.closest("form[data-表单缓存键]");
-        if (!表单) {
-          return;
+        const form = event.target.closest("form[data-form-cache-key]");
+        if (form) {
+          saveFormCache(form);
         }
-        保存表单缓存(表单);
       });
 
       document.addEventListener("reset", (event) => {
-        const 表单 = event.target.closest("form[data-表单缓存键]");
-        if (!表单) {
+        const form = event.target.closest("form[data-form-cache-key]");
+        if (!form) {
           return;
         }
-        const 缓存键 = 获取表单缓存键(表单);
+        const cacheKey = getFormCacheKey(form);
         window.setTimeout(() => {
-          sessionStorage.removeItem(缓存键);
+          sessionStorage.removeItem(cacheKey);
         }, 0);
       });
 
       document.addEventListener("DOMContentLoaded", () => {
-        恢复全部缓存表单();
-        更新任务操作按钮();
+        restoreAllCachedForms();
+        updateTaskActionButtons();
       });
+
       document.body.addEventListener("htmx:beforeRequest", (event) => {
-        if (event.target.id === "任务状态数据容器") {
-          记录日志滚动状态();
+        if (event.target.id === "task-status-data-container") {
+          rememberLogScrollState();
         }
       });
+
       document.body.addEventListener("htmx:afterSwap", (event) => {
-        if (event.target.id === "任务状态数据容器") {
-          更新任务操作按钮();
-          恢复日志滚动状态();
+        if (event.target.id === "task-status-data-container") {
+          updateTaskActionButtons();
+          restoreLogScrollState();
         }
       });
     </script>
   </body>
-  </html>
+</html>

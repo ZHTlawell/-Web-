@@ -1,4 +1,4 @@
-"""内存态 Runzo 单任务管理服务。"""
+"""In-memory Runzo task manager."""
 
 from __future__ import annotations
 
@@ -6,316 +6,338 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Optional, Set
+from typing import Callable, Optional
 
 from app.models.runzo import (
-    Runzo任务接口响应,
-    Runzo任务视图,
-    Runzo执行上下文,
-    Runzo表单参数,
-    日志级别,
-    任务状态,
-    任务检查点类型,
-    运行环境,
+    LogLevel,
+    RunzoExecutionContext,
+    RunzoTaskParams,
+    RuntimeEnvironment,
+    TaskApiResponse,
+    TaskCheckpointType,
+    TaskStatus,
+    TaskView,
 )
-from app.services.mongo_service import Mongo训练计划服务
+from app.services.mongo_service import MongoTrainingPlanService
 from app.services.payload_builder_service import (
-    检测周字段,
-    构建模拟请求体,
-    获取周序号,
-    转换对象ID,
+    build_simulate_payload,
+    detect_week_field,
+    get_week_index,
+    stringify_object_id,
 )
-from app.services.runzo_api_service import Runzo接口服务
-from app.services.settings import 获取环境连接配置, 获取配置, 环境连接配置
-from app.services.validation_service import 构建基础请求头, 构建用户画像副本
+from app.services.runzo_api_service import RunzoApiService
+from app.services.settings import EnvironmentConnectionConfig, get_environment_connection_config, get_settings
+from app.services.validation_service import build_base_headers, clone_user_profile
 
 
 @dataclass
-class _任务会话:
-    """保存单个浏览器会话对应的任务运行资源。"""
+class _TaskSession:
+    """Runtime resources bound to one browser session."""
 
-    当前任务: Optional[Runzo执行上下文] = None
-    当前线程: Optional[threading.Thread] = None
-    继续事件: threading.Event = field(default_factory=threading.Event)
-    取消事件: threading.Event = field(default_factory=threading.Event)
+    current_task: Optional[RunzoExecutionContext] = None
+    current_thread: Optional[threading.Thread] = None
+    continue_event: threading.Event = field(default_factory=threading.Event)
+    cancel_event: threading.Event = field(default_factory=threading.Event)
 
 
-class Runzo任务管理器:
-    """负责按浏览器会话启动、继续、终止和查询 Runzo 任务。"""
+class RunzoTaskManager:
+    """Manage task lifecycle per browser session."""
 
     def __init__(
         self,
-        mongo_service: Mongo训练计划服务,
-        api_service_factory: Callable[[环境连接配置], Runzo接口服务],
+        mongo_service: MongoTrainingPlanService,
+        api_service_factory: Callable[[EnvironmentConnectionConfig], RunzoApiService],
         sleep_seconds: float,
-        默认语言: str,
-        默认时区: str,
-        默认国家: str,
-        环境配置解析器: Callable[[运行环境], 环境连接配置],
+        default_lang: str,
+        default_time_zone: str,
+        default_country: str,
+        environment_config_resolver: Callable[[RuntimeEnvironment], EnvironmentConnectionConfig],
     ):
         self._mongo_service = mongo_service
         self._api_service_factory = api_service_factory
         self._sleep_seconds = sleep_seconds
-        self._默认语言 = 默认语言
-        self._默认时区 = 默认时区
-        self._默认国家 = 默认国家
-        self._环境配置解析器 = 环境配置解析器
-        self._锁 = threading.RLock()
-        self._会话任务映射: Dict[str, _任务会话] = {}
+        self._default_lang = default_lang
+        self._default_time_zone = default_time_zone
+        self._default_country = default_country
+        self._environment_config_resolver = environment_config_resolver
+        self._lock = threading.RLock()
+        self._session_tasks: dict[str, _TaskSession] = {}
 
-    def 获取当前任务视图(self, 会话标识: str) -> Runzo任务视图:
-        """读取指定会话当前任务的安全快照。"""
-        with self._锁:
-            会话 = self._会话任务映射.get(会话标识)
-            if 会话 is None or 会话.当前任务 is None:
-                return Runzo任务视图()
-            return 会话.当前任务.model_copy(deep=True).转为视图()
+    def get_current_task_view(self, session_id: str) -> TaskView:
+        """Return a safe snapshot of the current task."""
+        with self._lock:
+            session = self._session_tasks.get(session_id)
+            if session is None or session.current_task is None:
+                return TaskView()
+            return session.current_task.model_copy(deep=True).to_view()
 
-    def 启动任务(self, 会话标识: str, 参数: Runzo表单参数) -> Runzo任务接口响应:
-        """为指定会话创建并启动一个新任务。"""
-        with self._锁:
-            会话 = self._获取或创建会话(会话标识)
-            if 会话.当前任务 and 会话.当前任务.状态 in {任务状态.执行中, 任务状态.等待确认}:
+    def start_task(self, session_id: str, params: RunzoTaskParams) -> TaskApiResponse:
+        """Create and start a new task for the given session."""
+        with self._lock:
+            session = self._get_or_create_session(session_id)
+            if session.current_task and session.current_task.status in {
+                TaskStatus.RUNNING,
+                TaskStatus.WAITING_CONFIRM,
+            }:
                 raise RuntimeError("当前会话已有任务正在执行或等待确认，请先继续或终止当前任务。")
 
-            会话.继续事件.clear()
-            会话.取消事件.clear()
-            任务 = Runzo执行上下文(
-                任务ID=str(uuid.uuid4()),
-                参数=参数,
-                状态=任务状态.执行中,
-                当前环境=参数.environment,
-                摘要="任务已创建，等待开始读取训练计划。",
+            session.continue_event.clear()
+            session.cancel_event.clear()
+            task = RunzoExecutionContext(
+                task_id=str(uuid.uuid4()),
+                params=params,
+                status=TaskStatus.RUNNING,
+                environment=params.environment,
+                summary="任务已创建，等待开始读取训练计划。",
             )
-            任务.添加日志(日志级别.信息, "任务已创建，准备开始执行。")
-            会话.当前任务 = 任务
+            task.add_log(LogLevel.INFO, "任务已创建，准备开始执行。")
+            session.current_task = task
 
-            线程 = threading.Thread(target=self._执行任务线程, args=(会话标识, 任务.任务ID), daemon=True)
-            会话.当前线程 = 线程
-            线程.start()
+            thread = threading.Thread(target=self._run_task_thread, args=(session_id, task.task_id), daemon=True)
+            session.current_thread = thread
+            thread.start()
 
-            return Runzo任务接口响应(成功=True, 消息="任务已启动。", 数据=任务.转为视图())
+            return TaskApiResponse(success=True, message="任务已启动。", data=task.to_view())
 
-    def 继续任务(self, 会话标识: str) -> Runzo任务接口响应:
-        """继续指定会话中已暂停的任务。"""
-        with self._锁:
-            会话 = self._会话任务映射.get(会话标识)
-            if 会话 is None or 会话.当前任务 is None:
+    def continue_task(self, session_id: str) -> TaskApiResponse:
+        """Continue a paused task for the given session."""
+        with self._lock:
+            session = self._session_tasks.get(session_id)
+            if session is None or session.current_task is None:
                 raise RuntimeError("当前没有可继续的任务。")
-            if 会话.当前任务.状态 != 任务状态.等待确认:
+            if session.current_task.status != TaskStatus.WAITING_CONFIRM:
                 raise RuntimeError("当前任务不处于等待确认状态。")
-            会话.当前任务.状态 = 任务状态.执行中
-            会话.当前任务.摘要 = "已收到继续指令，任务恢复执行。"
-            会话.当前任务.检查点类型 = None
-            会话.当前任务.检查点提示 = None
-            会话.当前任务.添加日志(日志级别.信息, "页面已发送继续执行指令。")
-            会话.继续事件.set()
-            return Runzo任务接口响应(成功=True, 消息="任务已继续执行。", 数据=会话.当前任务.转为视图())
+            session.current_task.status = TaskStatus.RUNNING
+            session.current_task.summary = "已收到继续指令，任务恢复执行。"
+            session.current_task.checkpoint_type = None
+            session.current_task.checkpoint_message = None
+            session.current_task.add_log(LogLevel.INFO, "页面已发送继续执行指令。")
+            session.continue_event.set()
+            return TaskApiResponse(success=True, message="任务已继续执行。", data=session.current_task.to_view())
 
-    def 终止任务(self, 会话标识: str) -> Runzo任务接口响应:
-        """终止指定会话中的当前任务。"""
-        with self._锁:
-            会话 = self._会话任务映射.get(会话标识)
-            if 会话 is None or 会话.当前任务 is None:
+    def cancel_task(self, session_id: str) -> TaskApiResponse:
+        """Cancel the current task for the given session."""
+        with self._lock:
+            session = self._session_tasks.get(session_id)
+            if session is None or session.current_task is None:
                 raise RuntimeError("当前没有可终止的任务。")
 
-            if 会话.当前任务.状态 in {任务状态.已完成, 任务状态.已失败, 任务状态.已终止}:
-                return Runzo任务接口响应(成功=True, 消息="任务已经结束。", 数据=会话.当前任务.转为视图())
+            if session.current_task.status in {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED}:
+                return TaskApiResponse(success=True, message="任务已经结束。", data=session.current_task.to_view())
 
-            会话.取消事件.set()
-            会话.继续事件.set()
-            会话.当前任务.状态 = 任务状态.已终止
-            会话.当前任务.摘要 = "任务已被人工终止。"
-            会话.当前任务.错误信息 = None
-            会话.当前任务.检查点类型 = None
-            会话.当前任务.检查点提示 = None
-            会话.当前任务.添加日志(日志级别.警告, "用户在页面点击了终止任务。")
-            return Runzo任务接口响应(成功=True, 消息="任务已终止。", 数据=会话.当前任务.转为视图())
+            session.cancel_event.set()
+            session.continue_event.set()
+            session.current_task.status = TaskStatus.CANCELLED
+            session.current_task.summary = "任务已被人工终止。"
+            session.current_task.error_message = None
+            session.current_task.checkpoint_type = None
+            session.current_task.checkpoint_message = None
+            session.current_task.add_log(LogLevel.WARNING, "用户在页面点击了终止任务。")
+            return TaskApiResponse(success=True, message="任务已终止。", data=session.current_task.to_view())
 
-    def _获取或创建会话(self, 会话标识: str) -> _任务会话:
-        """返回指定会话的任务容器，不存在时自动创建。"""
-        return self._会话任务映射.setdefault(会话标识, _任务会话())
+    def _get_or_create_session(self, session_id: str) -> _TaskSession:
+        """Return the session container, creating it when missing."""
+        return self._session_tasks.setdefault(session_id, _TaskSession())
 
-    def _执行任务线程(self, 会话标识: str, 任务ID: str) -> None:
-        """后台线程入口。"""
-        with self._锁:
-            会话 = self._会话任务映射.get(会话标识)
-            if 会话 is None or 会话.当前任务 is None or 会话.当前任务.任务ID != 任务ID:
+    def _run_task_thread(self, session_id: str, task_id: str) -> None:
+        """Background thread entrypoint."""
+        with self._lock:
+            session = self._session_tasks.get(session_id)
+            if session is None or session.current_task is None or session.current_task.task_id != task_id:
                 return
-            任务 = 会话.当前任务
+            task = session.current_task
 
         try:
-            self._执行任务主体(会话标识, 任务)
+            self._run_task_body(session_id, task)
         except Exception as exc:  # noqa: BLE001
-            with self._锁:
-                会话 = self._会话任务映射.get(会话标识)
-                if 会话 and 会话.当前任务 and 会话.当前任务.任务ID == 任务ID:
-                    会话.当前任务.状态 = 任务状态.已失败
-                    会话.当前任务.错误信息 = str(exc)
-                    会话.当前任务.摘要 = "任务执行失败。"
-                    会话.当前任务.添加日志(日志级别.错误, str(exc))
+            with self._lock:
+                session = self._session_tasks.get(session_id)
+                if session and session.current_task and session.current_task.task_id == task_id:
+                    session.current_task.status = TaskStatus.FAILED
+                    session.current_task.error_message = str(exc)
+                    session.current_task.summary = "任务执行失败。"
+                    session.current_task.add_log(LogLevel.ERROR, str(exc))
 
-    def _执行任务主体(self, 会话标识: str, 任务: Runzo执行上下文) -> None:
-        """按原脚本规则执行完整任务流。"""
-        会话 = self._获取或创建会话(会话标识)
-        基础请求头 = 构建基础请求头(
-            参数=任务.参数,
-            默认语言=self._默认语言,
-            默认时区=self._默认时区,
-            默认国家=self._默认国家,
+    def _run_task_body(self, session_id: str, task: RunzoExecutionContext) -> None:
+        """Execute the full task flow with original script rules."""
+        session = self._get_or_create_session(session_id)
+        base_headers = build_base_headers(
+            params=task.params,
+            default_lang=self._default_lang,
+            default_time_zone=self._default_time_zone,
+            default_country=self._default_country,
         )
-        环境配置 = self._环境配置解析器(任务.参数.environment)
-        用户画像 = 构建用户画像副本(任务.参数)
-        已处理ID集合: Set[str] = set(任务.已处理ID列表)
+        env_config = self._environment_config_resolver(task.params.environment)
+        user_profile = clone_user_profile(task.params)
+        processed_ids = set(task.processed_ids)
 
-        cycle = self._mongo_service.获取训练计划(
-            参数=任务.参数,
-            已处理ID列表=已处理ID集合,
-            上次完成日开始时间=任务.上次完成日开始时间,
-            环境配置=环境配置,
+        cycle = self._mongo_service.fetch_training_plans(
+            params=task.params,
+            processed_ids=processed_ids,
+            last_completed_day_start_time=task.last_completed_day_start_time,
+            env_config=env_config,
         )
         if not cycle:
             raise RuntimeError("MongoDB 未查到任何可执行训练计划。")
 
-        任务.周字段名 = 检测周字段(cycle)
-        任务.摘要 = f"已载入 {len(cycle)} 条训练计划，开始执行。"
-        任务.添加日志(日志级别.信息, f"当前环境：{环境配置.name}。")
-        任务.添加日志(日志级别.信息, f"已载入 {len(cycle)} 条训练计划。")
+        task.week_field_name = detect_week_field(cycle)
+        task.summary = f"已载入 {len(cycle)} 条训练计划，开始执行。"
+        task.add_log(LogLevel.INFO, f"当前环境：{env_config.name}。")
+        task.add_log(LogLevel.INFO, f"已载入 {len(cycle)} 条训练计划。")
 
-        api_service = self._api_service_factory(环境配置)
+        api_service = self._api_service_factory(env_config)
         try:
             while cycle:
-                if 会话.取消事件.is_set():
+                if session.cancel_event.is_set():
                     return
 
                 daily = cycle.pop(0)
-                daily_id = 转换对象ID(daily["_id"])
-                训练类型 = str(daily["trainingType"])
-                当前周 = 获取周序号(daily, 任务.周字段名)
-                日开始时间 = int(daily["dayStartTime"])
+                daily_id = stringify_object_id(daily["_id"])
+                training_type = str(daily["trainingType"])
+                current_week = get_week_index(daily, task.week_field_name)
+                day_start_time = int(daily["dayStartTime"])
 
-                with self._锁:
-                    当前会话 = self._会话任务映射.get(会话标识)
-                    if 当前会话 is None or 当前会话.当前任务 is None or 当前会话.当前任务.任务ID != 任务.任务ID:
+                with self._lock:
+                    current_session = self._session_tasks.get(session_id)
+                    if (
+                        current_session is None
+                        or current_session.current_task is None
+                        or current_session.current_task.task_id != task.task_id
+                    ):
                         return
-                    任务.当前训练类型 = 训练类型
-                    任务.当前周 = 当前周
-                    任务.当前日开始时间 = 日开始时间
-                    任务.摘要 = f"正在执行 {训练类型}，dayStartTime={日开始时间}。"
-                    任务.添加日志(
-                        日志级别.信息,
-                        f"开始执行训练：dayStartTime={日开始时间}，week={当前周}，type={训练类型}。",
+                    task.current_training_type = training_type
+                    task.current_week = current_week
+                    task.current_day_start_time = day_start_time
+                    task.summary = f"正在执行 {training_type}，dayStartTime={day_start_time}。"
+                    task.add_log(
+                        LogLevel.INFO,
+                        f"开始执行训练：dayStartTime={day_start_time}，week={current_week}，type={training_type}。",
                     )
 
-                模拟请求体 = 构建模拟请求体(daily, 用户画像)
-                simulate_resp = api_service.模拟训练(模拟请求体)
-                settle_payload = dict(simulate_resp, dailyId=daily_id, userId=任务.参数.user_id)
-                请求头 = dict(基础请求头, **{"ts-request-id": str(uuid.uuid4())})
-                api_service.结算训练(settle_payload, 请求头)
+                simulate_payload = build_simulate_payload(daily, user_profile)
+                simulate_response = api_service.simulate_training(simulate_payload)
+                settle_payload = dict(simulate_response, dailyId=daily_id, userId=task.params.user_id)
+                headers = dict(base_headers, **{"ts-request-id": str(uuid.uuid4())})
+                api_service.settle_training(settle_payload, headers)
 
-                with self._锁:
-                    任务.已完成数量 += 1
-                    任务.已处理ID列表.append(daily_id)
-                    任务.上次完成日开始时间 = 日开始时间
-                    任务.摘要 = f"{训练类型} 执行完成。"
-                    任务.添加日志(
-                        日志级别.成功,
-                        f"训练完成：dayStartTime={日开始时间}，week={当前周}，type={训练类型}。",
+                with self._lock:
+                    task.completed_count += 1
+                    task.processed_ids.append(daily_id)
+                    task.last_completed_day_start_time = day_start_time
+                    task.summary = f"{training_type} 执行完成。"
+                    task.add_log(
+                        LogLevel.SUCCESS,
+                        f"训练完成：dayStartTime={day_start_time}，week={current_week}，type={training_type}。",
                     )
 
-                已处理ID集合.add(daily_id)
-                self._更新首次类型标记(任务, 训练类型)
+                processed_ids.add(daily_id)
+                self._update_first_type_flags(task, training_type)
 
-                if (not 任务.已完成首次类型确认) and 任务.已见到轻松或LSD and 任务.已见到阈值 and 任务.已见到间歇:
-                    任务.已完成首次类型确认 = True
-                    self._等待检查点(
-                        会话标识,
-                        任务,
-                        任务检查点类型.首次类型确认,
+                if (
+                    not task.has_completed_first_type_confirm
+                    and task.has_seen_easy_or_lsd
+                    and task.has_seen_threshold
+                    and task.has_seen_interval
+                ):
+                    task.has_completed_first_type_confirm = True
+                    self._wait_for_checkpoint(
+                        session_id,
+                        task,
+                        TaskCheckpointType.FIRST_TYPE_CONFIRM,
                         "已完成 Easy/LSD、Threshold、Interval 各一次，请点击继续执行。",
                     )
-                    if 会话.取消事件.is_set():
+                    if session.cancel_event.is_set():
                         return
 
-                下一周 = 获取周序号(cycle[0], 任务.周字段名) if cycle else None
-                if 下一周 != 当前周:
-                    self._等待检查点(
-                        会话标识,
-                        任务,
-                        任务检查点类型.周切换确认,
-                        f"第 {当前周} 周训练完成，请点击继续执行下一周。",
+                next_week = get_week_index(cycle[0], task.week_field_name) if cycle else None
+                if next_week != current_week:
+                    self._wait_for_checkpoint(
+                        session_id,
+                        task,
+                        TaskCheckpointType.WEEK_SWITCH_CONFIRM,
+                        f"第 {current_week} 周训练完成，请点击继续执行下一周。",
                     )
-                    if 会话.取消事件.is_set():
+                    if session.cancel_event.is_set():
                         return
 
-                    cycle = self._mongo_service.获取训练计划(
-                        参数=任务.参数,
-                        已处理ID列表=已处理ID集合,
-                        上次完成日开始时间=任务.上次完成日开始时间,
-                        环境配置=环境配置,
+                    cycle = self._mongo_service.fetch_training_plans(
+                        params=task.params,
+                        processed_ids=processed_ids,
+                        last_completed_day_start_time=task.last_completed_day_start_time,
+                        env_config=env_config,
                     )
-                    任务.周字段名 = 检测周字段(cycle)
-                    任务.添加日志(日志级别.信息, f"已重新读取训练计划，剩余 {len(cycle)} 条。")
+                    task.week_field_name = detect_week_field(cycle)
+                    task.add_log(LogLevel.INFO, f"已重新读取训练计划，剩余 {len(cycle)} 条。")
 
                 if self._sleep_seconds > 0:
                     time.sleep(self._sleep_seconds)
 
-            with self._锁:
-                任务.状态 = 任务状态.已完成
-                任务.摘要 = "全部训练已执行完成。"
-                任务.检查点类型 = None
-                任务.检查点提示 = None
-                任务.添加日志(日志级别.成功, "任务已全部执行完成。")
+            with self._lock:
+                task.status = TaskStatus.COMPLETED
+                task.summary = "全部训练已执行完成。"
+                task.checkpoint_type = None
+                task.checkpoint_message = None
+                task.add_log(LogLevel.SUCCESS, "任务已全部执行完成。")
         finally:
-            api_service.关闭()
+            api_service.close()
 
-    def _更新首次类型标记(self, 任务: Runzo执行上下文, 训练类型: str) -> None:
-        """更新首次三类训练的完成标记。"""
-        if 训练类型 in {"Easy", "LSD"}:
-            任务.已见到轻松或LSD = True
-        elif 训练类型 == "Threshold":
-            任务.已见到阈值 = True
-        elif 训练类型 == "Interval":
-            任务.已见到间歇 = True
+    def _update_first_type_flags(self, task: RunzoExecutionContext, training_type: str) -> None:
+        """Update markers used for the first checkpoint."""
+        if training_type in {"Easy", "LSD"}:
+            task.has_seen_easy_or_lsd = True
+        elif training_type == "Threshold":
+            task.has_seen_threshold = True
+        elif training_type == "Interval":
+            task.has_seen_interval = True
 
-    def _等待检查点(self, 会话标识: str, 任务: Runzo执行上下文, 类型: 任务检查点类型, 提示: str) -> None:
-        """把任务切换为等待确认状态，并阻塞到收到继续命令。"""
-        with self._锁:
-            会话 = self._会话任务映射.get(会话标识)
-            if 会话 is None:
+    def _wait_for_checkpoint(
+        self,
+        session_id: str,
+        task: RunzoExecutionContext,
+        checkpoint_type: TaskCheckpointType,
+        message: str,
+    ) -> None:
+        """Switch the task to waiting state until continue is received."""
+        with self._lock:
+            session = self._session_tasks.get(session_id)
+            if session is None:
                 return
-            任务.状态 = 任务状态.等待确认
-            任务.检查点类型 = 类型
-            任务.检查点提示 = 提示
-            任务.摘要 = 提示
-            任务.添加日志(日志级别.警告, 提示)
-            会话.继续事件.clear()
+            task.status = TaskStatus.WAITING_CONFIRM
+            task.checkpoint_type = checkpoint_type
+            task.checkpoint_message = message
+            task.summary = message
+            task.add_log(LogLevel.WARNING, message)
+            session.continue_event.clear()
 
-        while not 会话.取消事件.is_set():
-            if 会话.继续事件.wait(timeout=0.2):
-                会话.继续事件.clear()
-                with self._锁:
-                    当前会话 = self._会话任务映射.get(会话标识)
-                    if 当前会话 is None or 当前会话.当前任务 is None or 当前会话.当前任务.任务ID != 任务.任务ID:
+        while not session.cancel_event.is_set():
+            if session.continue_event.wait(timeout=0.2):
+                session.continue_event.clear()
+                with self._lock:
+                    current_session = self._session_tasks.get(session_id)
+                    if (
+                        current_session is None
+                        or current_session.current_task is None
+                        or current_session.current_task.task_id != task.task_id
+                    ):
                         return
-                    任务.状态 = 任务状态.执行中
-                    任务.检查点类型 = None
-                    任务.检查点提示 = None
-                    任务.摘要 = "已收到继续执行指令。"
-                    任务.添加日志(日志级别.信息, "继续执行任务。")
+                    task.status = TaskStatus.RUNNING
+                    task.checkpoint_type = None
+                    task.checkpoint_message = None
+                    task.summary = "已收到继续执行指令。"
+                    task.add_log(LogLevel.INFO, "继续执行任务。")
                 return
 
 
-_配置 = 获取配置()
-task_manager = Runzo任务管理器(
-    mongo_service=Mongo训练计划服务(_配置),
-    api_service_factory=lambda 环境配置: Runzo接口服务(
-        simulate_url=_配置.simulate_url,
-        settle_url=环境配置.settle_url,
+_settings = get_settings()
+task_manager = RunzoTaskManager(
+    mongo_service=MongoTrainingPlanService(_settings),
+    api_service_factory=lambda env_config: RunzoApiService(
+        simulate_url=_settings.simulate_url,
+        settle_url=env_config.settle_url,
     ),
-    sleep_seconds=_配置.day_sleep_seconds,
-    默认语言=_配置.default_lang,
-    默认时区=_配置.default_time_zone,
-    默认国家=_配置.default_country,
-    环境配置解析器=获取环境连接配置,
+    sleep_seconds=_settings.day_sleep_seconds,
+    default_lang=_settings.default_lang,
+    default_time_zone=_settings.default_time_zone,
+    default_country=_settings.default_country,
+    environment_config_resolver=get_environment_connection_config,
 )

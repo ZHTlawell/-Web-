@@ -4,16 +4,16 @@
     <button
       class="功能项 功能项激活 功能折叠按钮"
       type="button"
-      aria-expanded="{% if 当前模块 in ['多数据上传', '单数据上传'] %}true{% else %}false{% endif %}"
-      data-折叠触发="#runzo-子功能"
+      aria-expanded="{% if current_module in ['多数据上传', '单数据上传'] %}true{% else %}false{% endif %}"
+      data-toggle-target="#runzo-submenu"
     >
       <span class="功能图标">◉</span>
       <span>Runzo训练数据上传</span>
       <span class="折叠箭头">⌄</span>
     </button>
-    <div class="子功能组" id="runzo-子功能" {% if 当前模块 not in ['多数据上传', '单数据上传'] %}hidden{% endif %}>
-      <a class="子功能项 {% if 当前模块 == '单数据上传' %}子功能项激活{% endif %}" href="/单数据上传">单数据上传</a>
-      <a class="子功能项 {% if 当前模块 == '多数据上传' %}子功能项激活{% endif %}" href="/">多数据上传</a>
+    <div class="子功能组" id="runzo-submenu" {% if current_module not in ['多数据上传', '单数据上传'] %}hidden{% endif %}>
+      <a class="子功能项 {% if current_module == '单数据上传' %}子功能项激活{% endif %}" href="/单数据上传">单数据上传</a>
+      <a class="子功能项 {% if current_module == '多数据上传' %}子功能项激活{% endif %}" href="/">多数据上传</a>
     </div>
   </nav>
 </aside>

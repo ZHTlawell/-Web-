@@ -1,67 +1,70 @@
-"""页面路由定义。"""
+"""Page route definitions."""
+
+from pathlib import Path
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from app.models.runzo import 创建单数据默认表单参数, 创建默认表单参数, 单数据上传结果视图
-from app.services.session_service import 写入会话Cookie, 获取或创建会话标识
+from app.models.runzo import SingleUploadResultView, create_default_form_values, create_default_single_upload_form_values
+from app.services.session_service import get_or_create_session_id, write_session_cookie
 from app.services.task_manager_service import task_manager
 
-模板引擎 = Jinja2Templates(directory="app/templates")
-路由 = APIRouter()
+TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "templates"
+template_engine = Jinja2Templates(directory=str(TEMPLATE_DIR))
+router = APIRouter()
 
 
-@路由.get("/", response_class=HTMLResponse)
-def 首页(request: Request) -> HTMLResponse:
-    """渲染主页面。"""
-    会话标识, 是否新会话 = 获取或创建会话标识(request)
-    响应 = 模板引擎.TemplateResponse(
+@router.get("/", response_class=HTMLResponse)
+def home_page(request: Request) -> HTMLResponse:
+    """Render the multi-upload page."""
+    session_id, is_new_session = get_or_create_session_id(request)
+    response = template_engine.TemplateResponse(
         request=request,
         name="index.html",
         context={
-            "当前模块": "多数据上传",
-            "表单默认值": 创建默认表单参数(),
-            "任务视图": task_manager.获取当前任务视图(会话标识),
-            "状态提示": "",
+            "current_module": "多数据上传",
+            "default_form_values": create_default_form_values(),
+            "task_view": task_manager.get_current_task_view(session_id),
+            "status_message": "",
         },
     )
-    if 是否新会话:
-        写入会话Cookie(响应, 会话标识)
-    return 响应
+    if is_new_session:
+        write_session_cookie(response, session_id)
+    return response
 
 
-@路由.get("/单数据上传", response_class=HTMLResponse)
-def 单数据上传页面(request: Request) -> HTMLResponse:
-    """渲染单数据上传页面。"""
-    会话标识, 是否新会话 = 获取或创建会话标识(request)
-    响应 = 模板引擎.TemplateResponse(
+@router.get("/单数据上传", response_class=HTMLResponse)
+def single_upload_page(request: Request) -> HTMLResponse:
+    """Render the single-upload page."""
+    session_id, is_new_session = get_or_create_session_id(request)
+    response = template_engine.TemplateResponse(
         request=request,
         name="single_upload.html",
         context={
-            "当前模块": "单数据上传",
-            "表单默认值": 创建单数据默认表单参数(),
-            "结果视图": 单数据上传结果视图(),
-            "任务视图": task_manager.获取当前任务视图(会话标识),
+            "current_module": "单数据上传",
+            "default_form_values": create_default_single_upload_form_values(),
+            "result_view": SingleUploadResultView(),
+            "task_view": task_manager.get_current_task_view(session_id),
         },
     )
-    if 是否新会话:
-        写入会话Cookie(响应, 会话标识)
-    return 响应
+    if is_new_session:
+        write_session_cookie(response, session_id)
+    return response
 
 
-@路由.get("/任务状态片段", response_class=HTMLResponse)
-def 任务状态片段(request: Request) -> HTMLResponse:
-    """返回任务状态局部模板。"""
-    会话标识, 是否新会话 = 获取或创建会话标识(request)
-    响应 = 模板引擎.TemplateResponse(
+@router.get("/任务状态片段", response_class=HTMLResponse)
+def task_status_fragment(request: Request) -> HTMLResponse:
+    """Return task status partial template."""
+    session_id, is_new_session = get_or_create_session_id(request)
+    response = template_engine.TemplateResponse(
         request=request,
         name="_task_status_content.html",
         context={
-            "任务视图": task_manager.获取当前任务视图(会话标识),
-            "状态提示": "",
+            "task_view": task_manager.get_current_task_view(session_id),
+            "status_message": "",
         },
     )
-    if 是否新会话:
-        写入会话Cookie(响应, 会话标识)
-    return 响应
+    if is_new_session:
+        write_session_cookie(response, session_id)
+    return response

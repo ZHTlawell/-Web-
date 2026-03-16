@@ -1,180 +1,233 @@
-"""API 路由定义。"""
+"""API route definitions."""
 
 from __future__ import annotations
+
+from pathlib import Path
+from typing import Optional, Union
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from app.models.runzo import Runzo任务接口响应, Runzo任务视图, 单数据上传结果视图
-from app.services.session_service import 写入会话Cookie, 获取或创建会话标识
-from app.services.single_upload_service import 执行单数据上传
+from app.models.runzo import SingleUploadResultView, TaskApiResponse, TaskView
+from app.services.session_service import get_or_create_session_id, write_session_cookie
+from app.services.single_upload_service import execute_single_upload
 from app.services.task_manager_service import task_manager
-from app.services.validation_service import 从表单构建参数, 从表单构建单数据参数
+from app.services.validation_service import build_single_upload_params_from_form, build_task_params_from_form
 
-路由 = APIRouter(prefix="/api/runzo", tags=["runzo"])
-模板引擎 = Jinja2Templates(directory="app/templates")
+router = APIRouter(prefix="/api/runzo", tags=["runzo"])
+TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "templates"
+template_engine = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 
-def _是否为_htmx请求(request: Request) -> bool:
-    """判断当前请求是否来自 HTMX。"""
+def _is_htmx_request(request: Request) -> bool:
+    """Return whether the request comes from HTMX."""
     return request.headers.get("HX-Request", "").lower() == "true"
 
 
-def _渲染状态片段(request: Request, 任务视图: Runzo任务视图, 状态提示: str, status_code: int = 200) -> HTMLResponse:
-    """渲染任务状态局部模板。"""
-    return 模板引擎.TemplateResponse(
+def _render_status_fragment(
+    request: Request,
+    task_view: TaskView,
+    status_message: str,
+    status_code: int = 200,
+) -> HTMLResponse:
+    """Render the task status partial template."""
+    return template_engine.TemplateResponse(
         request=request,
         name="_task_status_content.html",
-        context={"任务视图": 任务视图, "状态提示": 状态提示},
+        context={"task_view": task_view, "status_message": status_message},
         status_code=status_code,
     )
 
 
-def _渲染单数据结果片段(request: Request, 结果视图: 单数据上传结果视图, status_code: int = 200) -> HTMLResponse:
-    """渲染单数据上传结果局部模板。"""
-    return 模板引擎.TemplateResponse(
+def _render_single_upload_result_fragment(
+    request: Request,
+    result_view: SingleUploadResultView,
+    status_code: int = 200,
+) -> HTMLResponse:
+    """Render the single-upload result partial template."""
+    return template_engine.TemplateResponse(
         request=request,
         name="_single_upload_result.html",
-        context={"结果视图": 结果视图},
+        context={"result_view": result_view},
         status_code=status_code,
     )
 
 
-def _附加会话Cookie(response: HTMLResponse | JSONResponse, 会话标识: str, 是否新会话: bool):
-    """在首次访问时写入会话 Cookie。"""
-    if 是否新会话:
-        写入会话Cookie(response, 会话标识)
+def _attach_session_cookie(response: Union[HTMLResponse, JSONResponse], session_id: str, is_new_session: bool):
+    """Write cookie for newly created sessions."""
+    if is_new_session:
+        write_session_cookie(response, session_id)
     return response
 
 
-@路由.post("/start")
-async def 启动任务(request: Request):
-    """接收表单并启动任务。"""
-    会话标识, 是否新会话 = 获取或创建会话标识(request)
+def _resolve_app_version(request: Request) -> Optional[str]:
+    """Read app version from request headers."""
+    return request.headers.get("ts-app-version") or request.headers.get("x-ts-app-version")
+
+
+@router.post("/start")
+async def start_task(request: Request):
+    """Parse form data and start a task."""
+    session_id, is_new_session = get_or_create_session_id(request)
     try:
-        表单 = await request.form()
-        参数 = 从表单构建参数(表单)
-        响应 = task_manager.启动任务(会话标识, 参数)
+        form_data = await request.form()
+        params = build_task_params_from_form(form_data, app_version=_resolve_app_version(request))
+        response = task_manager.start_task(session_id, params)
     except Exception as exc:  # noqa: BLE001
-        if _是否为_htmx请求(request):
-            return _附加会话Cookie(
-                _渲染状态片段(request, task_manager.获取当前任务视图(会话标识), f"启动失败：{exc}", status_code=400),
-                会话标识,
-                是否新会话,
+        if _is_htmx_request(request):
+            return _attach_session_cookie(
+                _render_status_fragment(
+                    request,
+                    task_manager.get_current_task_view(session_id),
+                    f"启动失败：{exc}",
+                    status_code=400,
+                ),
+                session_id,
+                is_new_session,
             )
-        return _附加会话Cookie(
+        return _attach_session_cookie(
             JSONResponse(
-            status_code=400,
-            content=Runzo任务接口响应(
-                成功=False,
-                消息=f"启动失败：{exc}",
-                数据=task_manager.获取当前任务视图(会话标识),
-            ).model_dump(mode="json"),
-        ),
-            会话标识,
-            是否新会话,
+                status_code=400,
+                content=TaskApiResponse(
+                    success=False,
+                    message=f"启动失败：{exc}",
+                    data=task_manager.get_current_task_view(session_id),
+                ).model_dump(mode="json"),
+            ),
+            session_id,
+            is_new_session,
         )
 
-    if _是否为_htmx请求(request):
-        return _附加会话Cookie(_渲染状态片段(request, 响应.数据, 响应.消息), 会话标识, 是否新会话)
-    return _附加会话Cookie(JSONResponse(content=响应.model_dump(mode="json")), 会话标识, 是否新会话)
+    if _is_htmx_request(request):
+        return _attach_session_cookie(
+            _render_status_fragment(request, response.data, response.message),
+            session_id,
+            is_new_session,
+        )
+    return _attach_session_cookie(JSONResponse(content=response.model_dump(mode="json")), session_id, is_new_session)
 
 
-@路由.post("/continue")
-def 继续任务(request: Request):
-    """继续已暂停的任务。"""
-    会话标识, 是否新会话 = 获取或创建会话标识(request)
+@router.post("/continue")
+def continue_task(request: Request):
+    """Continue a paused task."""
+    session_id, is_new_session = get_or_create_session_id(request)
     try:
-        响应 = task_manager.继续任务(会话标识)
+        response = task_manager.continue_task(session_id)
     except Exception as exc:  # noqa: BLE001
-        if _是否为_htmx请求(request):
-            return _附加会话Cookie(
-                _渲染状态片段(request, task_manager.获取当前任务视图(会话标识), f"继续失败：{exc}", status_code=400),
-                会话标识,
-                是否新会话,
+        if _is_htmx_request(request):
+            return _attach_session_cookie(
+                _render_status_fragment(
+                    request,
+                    task_manager.get_current_task_view(session_id),
+                    f"继续失败：{exc}",
+                    status_code=400,
+                ),
+                session_id,
+                is_new_session,
             )
-        return _附加会话Cookie(
+        return _attach_session_cookie(
             JSONResponse(
-            status_code=400,
-            content=Runzo任务接口响应(
-                成功=False,
-                消息=f"继续失败：{exc}",
-                数据=task_manager.获取当前任务视图(会话标识),
-            ).model_dump(mode="json"),
-        ),
-            会话标识,
-            是否新会话,
+                status_code=400,
+                content=TaskApiResponse(
+                    success=False,
+                    message=f"继续失败：{exc}",
+                    data=task_manager.get_current_task_view(session_id),
+                ).model_dump(mode="json"),
+            ),
+            session_id,
+            is_new_session,
         )
 
-    if _是否为_htmx请求(request):
-        return _附加会话Cookie(_渲染状态片段(request, 响应.数据, 响应.消息), 会话标识, 是否新会话)
-    return _附加会话Cookie(JSONResponse(content=响应.model_dump(mode="json")), 会话标识, 是否新会话)
+    if _is_htmx_request(request):
+        return _attach_session_cookie(
+            _render_status_fragment(request, response.data, response.message),
+            session_id,
+            is_new_session,
+        )
+    return _attach_session_cookie(JSONResponse(content=response.model_dump(mode="json")), session_id, is_new_session)
 
 
-@路由.post("/cancel")
-def 终止任务(request: Request):
-    """终止当前任务。"""
-    会话标识, 是否新会话 = 获取或创建会话标识(request)
+@router.post("/cancel")
+def cancel_task(request: Request):
+    """Cancel the current task."""
+    session_id, is_new_session = get_or_create_session_id(request)
     try:
-        响应 = task_manager.终止任务(会话标识)
+        response = task_manager.cancel_task(session_id)
     except Exception as exc:  # noqa: BLE001
-        if _是否为_htmx请求(request):
-            return _附加会话Cookie(
-                _渲染状态片段(request, task_manager.获取当前任务视图(会话标识), f"终止失败：{exc}", status_code=400),
-                会话标识,
-                是否新会话,
+        if _is_htmx_request(request):
+            return _attach_session_cookie(
+                _render_status_fragment(
+                    request,
+                    task_manager.get_current_task_view(session_id),
+                    f"终止失败：{exc}",
+                    status_code=400,
+                ),
+                session_id,
+                is_new_session,
             )
-        return _附加会话Cookie(
+        return _attach_session_cookie(
             JSONResponse(
-            status_code=400,
-            content=Runzo任务接口响应(
-                成功=False,
-                消息=f"终止失败：{exc}",
-                数据=task_manager.获取当前任务视图(会话标识),
-            ).model_dump(mode="json"),
-        ),
-            会话标识,
-            是否新会话,
+                status_code=400,
+                content=TaskApiResponse(
+                    success=False,
+                    message=f"终止失败：{exc}",
+                    data=task_manager.get_current_task_view(session_id),
+                ).model_dump(mode="json"),
+            ),
+            session_id,
+            is_new_session,
         )
 
-    if _是否为_htmx请求(request):
-        return _附加会话Cookie(_渲染状态片段(request, 响应.数据, 响应.消息), 会话标识, 是否新会话)
-    return _附加会话Cookie(JSONResponse(content=响应.model_dump(mode="json")), 会话标识, 是否新会话)
+    if _is_htmx_request(request):
+        return _attach_session_cookie(
+            _render_status_fragment(request, response.data, response.message),
+            session_id,
+            is_new_session,
+        )
+    return _attach_session_cookie(JSONResponse(content=response.model_dump(mode="json")), session_id, is_new_session)
 
 
-@路由.get("/status")
-def 当前状态(request: Request):
-    """返回当前任务的 JSON 状态。"""
-    会话标识, 是否新会话 = 获取或创建会话标识(request)
-    响应 = JSONResponse(
-        content=Runzo任务接口响应(
-            成功=True,
-            消息="获取成功。",
-            数据=task_manager.获取当前任务视图(会话标识),
+@router.get("/status")
+def current_status(request: Request):
+    """Return current task JSON status."""
+    session_id, is_new_session = get_or_create_session_id(request)
+    response = JSONResponse(
+        content=TaskApiResponse(
+            success=True,
+            message="获取成功。",
+            data=task_manager.get_current_task_view(session_id),
         ).model_dump(mode="json")
     )
-    return _附加会话Cookie(响应, 会话标识, 是否新会话)
+    return _attach_session_cookie(response, session_id, is_new_session)
 
 
-@路由.post("/single-upload/execute")
-async def 执行单数据上传接口(request: Request):
-    """执行单数据上传流程。"""
-    会话标识, 是否新会话 = 获取或创建会话标识(request)
+@router.post("/single-upload/execute")
+async def execute_single_upload_endpoint(request: Request):
+    """Execute single-upload flow."""
+    session_id, is_new_session = get_or_create_session_id(request)
     try:
-        表单 = await request.form()
-        参数 = 从表单构建单数据参数(表单)
-        结果视图 = 执行单数据上传(参数)
-        状态码 = 200 if 结果视图.是否成功 else 400
+        form_data = await request.form()
+        params = build_single_upload_params_from_form(form_data, app_version=_resolve_app_version(request))
+        result_view = execute_single_upload(params)
+        status_code = 200 if result_view.success else 400
     except Exception as exc:  # noqa: BLE001
-        结果视图 = 单数据上传结果视图(
-            是否成功=False,
-            执行状态="执行失败",
-            摘要="单数据上传执行失败。",
-            错误信息=str(exc),
+        result_view = SingleUploadResultView(
+            success=False,
+            execution_status="执行失败",
+            summary="单数据上传执行失败。",
+            error_message=str(exc),
         )
-        状态码 = 400
+        status_code = 400
 
-    if _是否为_htmx请求(request):
-        return _附加会话Cookie(_渲染单数据结果片段(request, 结果视图, 状态码), 会话标识, 是否新会话)
-    return _附加会话Cookie(JSONResponse(status_code=状态码, content=结果视图.model_dump(mode="json")), 会话标识, 是否新会话)
+    if _is_htmx_request(request):
+        return _attach_session_cookie(
+            _render_single_upload_result_fragment(request, result_view, status_code),
+            session_id,
+            is_new_session,
+        )
+    return _attach_session_cookie(
+        JSONResponse(status_code=status_code, content=result_view.model_dump(mode="json")),
+        session_id,
+        is_new_session,
+    )

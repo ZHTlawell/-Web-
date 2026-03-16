@@ -1,4 +1,4 @@
-<section class="卡片 状态卡片" id="单数据结果容器">
+<section class="卡片 状态卡片" id="single-upload-result-container">
   <div class="卡片标题区">
     <h2>执行结果区</h2>
   </div>
@@ -7,9 +7,9 @@
     <div>
       <span class="标签">执行结果</span>
       <strong>
-        {% if 结果视图.是否成功 %}
+        {% if result_view.success %}
         成功
-        {% elif 结果视图.错误信息 %}
+        {% elif result_view.error_message %}
         失败
         {% else %}
         待开始
@@ -18,48 +18,48 @@
     </div>
     <div>
       <span class="标签">当前环境</span>
-      <strong>{{ "预发布环境" if 结果视图.当前环境.value == "preprod" else "测试环境" }}</strong>
+      <strong>{{ "预发布环境" if result_view.environment.value == "preprod" else "测试环境" }}</strong>
     </div>
   </div>
 
   <dl class="详情列表">
-    <div><dt>当前摘要</dt><dd id="单数据摘要值">{{ 结果视图.摘要 }}</dd></div>
-    <div><dt>执行状态</dt><dd id="单数据执行状态值">{{ 结果视图.执行状态 }}</dd></div>
+    <div><dt>当前摘要</dt><dd id="single-upload-summary-value">{{ result_view.summary }}</dd></div>
+    <div><dt>执行状态</dt><dd id="single-upload-status-value">{{ result_view.execution_status }}</dd></div>
   </dl>
 
-  {% if 结果视图.错误信息 %}
-  <div class="提示条">{{ 结果视图.错误信息 }}</div>
+  {% if result_view.error_message %}
+  <div class="提示条">{{ result_view.error_message }}</div>
   {% endif %}
 
   <div class="日志区">
     <div class="卡片标题区 紧凑">
       <h3>simulate 请求体</h3>
-      <button class="复制按钮" type="button" data-复制来源="simulate请求体内容">复制内容</button>
+      <button class="复制按钮" type="button" data-copy-source="simulate-request-content">复制内容</button>
     </div>
-    <pre class="代码展示区" id="simulate请求体内容">{{ 结果视图.simulate请求体 or "尚未生成" }}</pre>
+    <pre class="代码展示区" id="simulate-request-content">{{ result_view.simulate_request or "尚未生成" }}</pre>
   </div>
 
   <div class="日志区">
     <div class="卡片标题区 紧凑">
       <h3>simulate 响应体</h3>
-      <button class="复制按钮" type="button" data-复制来源="simulate响应体内容">复制内容</button>
+      <button class="复制按钮" type="button" data-copy-source="simulate-response-content">复制内容</button>
     </div>
-    <pre class="代码展示区" id="simulate响应体内容">{{ 结果视图.simulate响应体 or "尚未调用" }}</pre>
+    <pre class="代码展示区" id="simulate-response-content">{{ result_view.simulate_response or "尚未调用" }}</pre>
   </div>
 
   <div class="日志区">
     <div class="卡片标题区 紧凑">
       <h3>settlement 请求体</h3>
-      <button class="复制按钮" type="button" data-复制来源="settlement请求体内容">复制内容</button>
+      <button class="复制按钮" type="button" data-copy-source="settlement-request-content">复制内容</button>
     </div>
-    <pre class="代码展示区" id="settlement请求体内容">{{ 结果视图.settlement请求体 or "尚未生成" }}</pre>
+    <pre class="代码展示区" id="settlement-request-content">{{ result_view.settlement_request or "尚未生成" }}</pre>
   </div>
 
   <div class="日志区">
     <div class="卡片标题区 紧凑">
       <h3>settlement 响应体</h3>
-      <button class="复制按钮" type="button" data-复制来源="settlement响应体内容">复制内容</button>
+      <button class="复制按钮" type="button" data-copy-source="settlement-response-content">复制内容</button>
     </div>
-    <pre class="代码展示区" id="settlement响应体内容">{{ 结果视图.settlement响应体 or "尚未调用" }}</pre>
+    <pre class="代码展示区" id="settlement-response-content">{{ result_view.settlement_response or "尚未调用" }}</pre>
   </div>
 </section>

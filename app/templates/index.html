@@ -22,18 +22,18 @@
 
         <form
           class="参数表单"
-          data-表单缓存键="多数据上传表单"
+          data-form-cache-key="multi-upload-form"
           hx-post="/api/runzo/start"
-          hx-target="#任务状态数据容器"
+          hx-target="#task-status-data-container"
           hx-swap="innerHTML"
-          hx-sync="#任务状态数据容器:replace"
+          hx-sync="#task-status-data-container:replace"
         >
           <div class="环境条">
             <label class="环境选择">
               <span>运行环境</span>
               <select name="environment">
-                <option value="test" {% if 表单默认值.environment == "test" %}selected{% endif %}>测试环境</option>
-                <option value="preprod" {% if 表单默认值.environment == "preprod" %}selected{% endif %}>预发布环境</option>
+                <option value="test" {% if default_form_values.environment == "test" %}selected{% endif %}>测试环境</option>
+                <option value="preprod" {% if default_form_values.environment == "preprod" %}selected{% endif %}>预发布环境</option>
               </select>
             </label>
             <div class="环境说明">
@@ -45,11 +45,20 @@
           <div class="表单网格">
             <label>
               <span>用户 ID</span>
-              <input name="userId" type="text" value="{{ 表单默认值.userId }}" />
+              <input name="userId" type="text" value="{{ default_form_values.userId }}" />
             </label>
             <label>
               <span>Authorization</span>
-              <input name="authorization" type="text" placeholder="请输入 Bearer Token" value="{{ 表单默认值.authorization }}" />
+              <input name="authorization" type="text" placeholder="请输入 Bearer Token" value="{{ default_form_values.authorization }}" />
+            </label>
+            <label>
+              <span>ts-app-version</span>
+              <input
+                name="tsAppVersion"
+                type="text"
+                placeholder="例如 2.6.0"
+                value="{{ default_form_values.tsAppVersion }}"
+              />
             </label>
             <label>
               <span>断点起跑时间</span>
@@ -57,44 +66,44 @@
                 name="startFromDayStartTime"
                 type="number"
                 placeholder="留空表示 None"
-                value="{{ 表单默认值.startFromDayStartTime }}"
+                value="{{ default_form_values.startFromDayStartTime }}"
               />
             </label>
             <label>
               <span>Mongo createBy</span>
-              <input name="mongoCreateBy" type="text" value="{{ 表单默认值.mongoCreateBy }}" />
+              <input name="mongoCreateBy" type="text" value="{{ default_form_values.mongoCreateBy }}" />
             </label>
             <label>
               <span>性别</span>
-              <input name="gender" type="text" value="{{ 表单默认值.gender }}" />
+              <input name="gender" type="text" value="{{ default_form_values.gender }}" />
             </label>
             <label>
               <span>年龄</span>
-              <input name="age" type="number" value="{{ 表单默认值.age }}" />
+              <input name="age" type="number" value="{{ default_form_values.age }}" />
             </label>
             <label>
               <span>体重</span>
-              <input name="weight" type="number" step="0.1" value="{{ 表单默认值.weight }}" />
+              <input name="weight" type="number" step="0.1" value="{{ default_form_values.weight }}" />
             </label>
             <label>
               <span>身高</span>
-              <input name="height" type="number" step="0.1" value="{{ 表单默认值.height }}" />
+              <input name="height" type="number" step="0.1" value="{{ default_form_values.height }}" />
             </label>
             <label>
               <span>最大心率</span>
-              <input name="hrMax" type="number" value="{{ 表单默认值.hrMax }}" />
+              <input name="hrMax" type="number" value="{{ default_form_values.hrMax }}" />
             </label>
             <label>
               <span>静息心率</span>
-              <input name="hrRest" type="number" value="{{ 表单默认值.hrRest }}" />
+              <input name="hrRest" type="number" value="{{ default_form_values.hrRest }}" />
             </label>
             <label>
               <span>目标距离</span>
-              <input name="targetDistance" type="number" step="0.1" value="{{ 表单默认值.targetDistance }}" />
+              <input name="targetDistance" type="number" step="0.1" value="{{ default_form_values.targetDistance }}" />
             </label>
             <label>
               <span>强度偏好</span>
-              <input name="intensityPreference" type="text" value="{{ 表单默认值.intensityPreference }}" />
+              <input name="intensityPreference" type="text" value="{{ default_form_values.intensityPreference }}" />
             </label>
           </div>
 

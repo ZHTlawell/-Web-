@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.venv/
+venv/
+env/
+
+# 测试与缓存
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 构建与临时文件
+build/
+dist/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+
+# 历史前端产物
+node_modules/
+.next/
+out/
+
+# 环境变量
+.env
+.env.*
+
+# 通用杂项
+.DS_Store
+*.pem
+
+# Codex 本地技能目录
+.agent/
+.agents/

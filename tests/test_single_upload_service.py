@@ -1,19 +1,19 @@
-"""单数据上传服务测试。"""
+"""Single upload service tests."""
 
-from app.services.single_upload_service import _构建结算请求体
+from app.services.single_upload_service import build_settlement_payload
 
 
-def test_构建结算请求体_会覆盖_daily和userId():
-    """settlement 请求体应使用页面输入覆盖 daily、dailyId 和 userId。"""
-    simulate响应体 = {
+def test_build_settlement_payload_overrides_daily_and_user_id():
+    """Settlement payload should override daily, dailyId and userId."""
+    simulate_response = {
         "daily": "old-daily",
         "userId": "old-user",
         "plan": {"ok": True},
     }
 
-    settlement请求体 = _构建结算请求体(simulate响应体, "new-user", "daily-001")
+    settlement_payload = build_settlement_payload(simulate_response, "new-user", "daily-001")
 
-    assert settlement请求体["daily"] == "daily-001"
-    assert settlement请求体["dailyId"] == "daily-001"
-    assert settlement请求体["userId"] == "new-user"
-    assert settlement请求体["plan"] == {"ok": True}
+    assert settlement_payload["daily"] == "daily-001"
+    assert settlement_payload["dailyId"] == "daily-001"
+    assert settlement_payload["userId"] == "new-user"
+    assert settlement_payload["plan"] == {"ok": True}

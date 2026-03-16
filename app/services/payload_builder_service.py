@@ -1,96 +1,96 @@
-"""simulate 请求体构建服务。"""
+"""simulate payload builder."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from app.models.runzo import Runzo用户画像
+from app.models.runzo import RunzoUserProfile
 
 
-def 获取配速范围(block: Dict[str, Any]) -> tuple[str, str]:
-    """读取训练块的最小和最大配速。"""
+def get_pace_range(block: dict[str, Any]) -> tuple[str, str]:
+    """Read min/max pace from a training block."""
     return str(block.get("minPace", "0:00")), str(block.get("maxPace", "0:00"))
 
 
-def 检测周字段(cycle: List[Dict[str, Any]]) -> Optional[str]:
-    """从训练计划列表中探测周字段名称。"""
+def detect_week_field(cycle: list[dict[str, Any]]) -> Optional[str]:
+    """Detect the week field name from a training plan list."""
     for daily in cycle:
         if "weekIndex" in daily and daily.get("weekIndex") is not None:
             return "weekIndex"
     return None
 
 
-def 获取周序号(daily: Dict[str, Any], 周字段名: Optional[str]) -> int:
-    """按探测到的字段读取周序号。"""
-    if 周字段名:
-        return int(daily.get(周字段名))
+def get_week_index(daily: dict[str, Any], week_field_name: Optional[str]) -> int:
+    """Read week index using the detected field name."""
+    if week_field_name:
+        return int(daily.get(week_field_name))
     return -1
 
 
-def 转换对象ID(value: Any) -> str:
-    """统一把 Mongo _id 转成字符串。"""
+def stringify_object_id(value: Any) -> str:
+    """Convert Mongo _id to string."""
     return str(value)
 
 
-def 构建模拟请求体(daily: Dict[str, Any], 用户画像: Runzo用户画像) -> Dict[str, Any]:
-    """根据训练类型构建 simulate 接口请求体。"""
-    训练类型 = daily["trainingType"]
-    训练块列表 = daily.get("trainingBlocks", []) or []
-    目标距离 = float(daily.get("runningDistance", 0) or 0)
+def build_simulate_payload(daily: dict[str, Any], user_profile: RunzoUserProfile) -> dict[str, Any]:
+    """Build simulate payload based on training type."""
+    training_type = daily["trainingType"]
+    training_blocks = daily.get("trainingBlocks", []) or []
+    target_distance = float(daily.get("runningDistance", 0) or 0)
 
-    基础结构: Dict[str, Any] = {
-        "userData": 用户画像.model_dump(by_alias=True),
+    payload: dict[str, Any] = {
+        "userData": user_profile.model_dump(by_alias=True),
         "trainingPlan": {},
         "stateDescription": "",
     }
 
-    if 训练类型 in {"Easy", "Rest", "ExtraSession"}:
-        if len(训练块列表) < 1:
-            raise ValueError(f"{训练类型} 训练缺少 trainingBlocks")
-        最小配速, 最大配速 = 获取配速范围(训练块列表[0])
-        基础结构["trainingPlan"] = {
-            "trainingType": 训练类型,
-            "targetDistance": 目标距离,
-            "phasePace": {"main": {"min": 最小配速, "max": 最大配速}},
+    if training_type in {"Easy", "Rest", "ExtraSession"}:
+        if len(training_blocks) < 1:
+            raise ValueError(f"{training_type} 训练缺少 trainingBlocks")
+        min_pace, max_pace = get_pace_range(training_blocks[0])
+        payload["trainingPlan"] = {
+            "trainingType": training_type,
+            "targetDistance": target_distance,
+            "phasePace": {"main": {"min": min_pace, "max": max_pace}},
         }
-    elif 训练类型 == "LSD":
-        if len(训练块列表) < 1:
+    elif training_type == "LSD":
+        if len(training_blocks) < 1:
             raise ValueError("LSD 训练缺少 trainingBlocks")
-        最小配速, 最大配速 = 获取配速范围(训练块列表[0])
-        基础结构["trainingPlan"] = {
+        min_pace, max_pace = get_pace_range(training_blocks[0])
+        payload["trainingPlan"] = {
             "trainingType": "LSD",
-            "targetDistance": 目标距离,
+            "targetDistance": target_distance,
             "phasePace": {
-                "main": {"min": 最小配速, "max": 最大配速},
-                "rest": {"min": 最小配速, "max": 最大配速},
+                "main": {"min": min_pace, "max": max_pace},
+                "rest": {"min": min_pace, "max": max_pace},
             },
         }
-    elif 训练类型 == "Threshold":
-        if len(训练块列表) < 2:
+    elif training_type == "Threshold":
+        if len(training_blocks) < 2:
             raise ValueError("Threshold 训练至少需要两个训练块")
-        热身最小, 热身最大 = 获取配速范围(训练块列表[0])
-        主段最小, 主段最大 = 获取配速范围(训练块列表[1])
-        基础结构["trainingPlan"] = {
+        warmup_min, warmup_max = get_pace_range(training_blocks[0])
+        main_min, main_max = get_pace_range(training_blocks[1])
+        payload["trainingPlan"] = {
             "trainingType": "Threshold",
-            "targetDistance": 目标距离,
+            "targetDistance": target_distance,
             "phasePace": {
-                "warmup": {"min": 热身最小, "max": 热身最大},
-                "main": {"min": 主段最小, "max": 主段最大},
-                "rest": {"min": 热身最小, "max": 热身最大},
+                "warmup": {"min": warmup_min, "max": warmup_max},
+                "main": {"min": main_min, "max": main_max},
+                "rest": {"min": warmup_min, "max": warmup_max},
             },
             "phaseDistance": {
-                "warmup": float(训练块列表[0].get("distance", 0) or 0),
-                "main": float(训练块列表[1].get("distance", 0) or 0),
+                "warmup": float(training_blocks[0].get("distance", 0) or 0),
+                "main": float(training_blocks[1].get("distance", 0) or 0),
                 "rest": 0.1,
             },
         }
-    elif 训练类型 == "Interval":
-        基础结构["trainingPlan"] = {
+    elif training_type == "Interval":
+        payload["trainingPlan"] = {
             "trainingType": "Interval",
-            "targetDistance": 目标距离,
-            "trainingBlocks": 训练块列表,
+            "targetDistance": target_distance,
+            "trainingBlocks": training_blocks,
         }
     else:
-        raise ValueError(f"不支持的训练类型: {训练类型}")
+        raise ValueError(f"不支持的训练类型: {training_type}")
 
-    return 基础结构
+    return payload

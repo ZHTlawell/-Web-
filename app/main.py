@@ -1,19 +1,24 @@
-"""应用主入口，负责创建 FastAPI 实例并注册路由。"""
+"""Application entrypoint."""
+
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.routes.api_routes import 路由 as 接口路由
-from app.routes.page_routes import 路由 as 页面路由
+from app.routes.api_routes import router as api_router
+from app.routes.page_routes import router as page_router
 
 
-def 创建应用() -> FastAPI:
-    """创建并配置 FastAPI 应用实例。"""
-    应用 = FastAPI(title="Runzo 测试执行平台", version="1.0.0")
-    应用.include_router(页面路由)
-    应用.include_router(接口路由)
-    应用.mount("/static", StaticFiles(directory="app/static"), name="static")
-    return 应用
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
-app = 创建应用()
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
+    application = FastAPI(title="Runzo 测试执行平台", version="1.0.0")
+    application.include_router(page_router)
+    application.include_router(api_router)
+    application.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    return application
+
+
+app = create_app()
