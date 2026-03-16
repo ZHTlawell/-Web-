@@ -39,3 +39,6 @@ out/
 # 本地文档与脚本
 docs/
 scripts/
+
+# 历史脚本备份
+runzo_simulate_and_settle_single_user_v2.py
